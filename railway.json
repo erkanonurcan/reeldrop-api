@@ -3,7 +3,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "gunicorn -w 3 -t 120 -b 0.0.0.0:$PORT app:app",
+    "startCommand": "gunicorn --bind 0.0.0.0:$PORT --workers=3 --timeout 120 --charset utf-8 --access-logfile - --error-logfile - app:app",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30
   }
