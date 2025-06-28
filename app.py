@@ -129,6 +129,9 @@ class EnhancedVideoDownloader:
                 'extract_flat': False,
                 'skip_download': True,  # Sadece info çıkar
                 'logger': self.DebugLogger(self.logger),
+                'outtmpl': {
+                    'default': '%(title)s.%(ext)s'
+                }
             }
             
             with yt_dlp.YoutubeDL(opts) as ydl:
@@ -197,7 +200,9 @@ class EnhancedVideoDownloader:
                 self.logger.info(f"Attempting download with quality option {i+1}: {current_quality}")
                 
                 opts = self.create_debug_opts(platform, current_quality)
-                opts['outtmpl'] = os.path.join(temp_dir, '%(title)s.%(ext)s')
+                opts['outtmpl'] = {
+                    'default': os.path.join(temp_dir, '%(title)s.%(ext)s')
+                }
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     # İlk olarak info al
@@ -217,7 +222,9 @@ class EnhancedVideoDownloader:
                         self.logger.debug(f"Format: {fmt.get('format_id')} - {fmt.get('ext')} - {fmt.get('resolution', 'unknown')}")
                     
                     # Output template'i güncelle
-                    opts['outtmpl'] = os.path.join(temp_dir, f'{title}.%(ext)s')
+                    opts['outtmpl'] = {
+                        'default': os.path.join(temp_dir, f'{title}.%(ext)s')
+                    }
                     
                     # Download yap
                     self.logger.info("Starting actual download...")
