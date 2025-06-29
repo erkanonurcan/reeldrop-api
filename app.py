@@ -87,9 +87,17 @@ class SimpleDownloader:
         temp_dir = tempfile.mkdtemp()
         
         try:
-            # YouTube için özel stratejiler
+            # Platform tespiti
             if 'youtube' in url.lower() or 'youtu.be' in url.lower():
                 return self._youtube_download(url, quality, temp_dir)
+            elif 'instagram.com' in url.lower():
+                return self._instagram_download(url, quality, temp_dir)
+            elif 'facebook.com' in url.lower() or 'fb.watch' in url.lower():
+                return self._facebook_download(url, quality, temp_dir)
+            elif 'tiktok.com' in url.lower():
+                return self._tiktok_download(url, quality, temp_dir)
+            elif 'twitter.com' in url.lower() or 'x.com' in url.lower():
+                return self._twitter_download(url, quality, temp_dir)
             else:
                 return self._generic_download(url, quality, temp_dir)
         except Exception as e:
@@ -177,6 +185,256 @@ class SimpleDownloader:
                 
         raise Exception("All YouTube strategies failed")
 
+    def _instagram_download(self, url, quality, temp_dir):
+        """Instagram video indirme"""
+        self.logger.info("Instagram download started")
+        
+        strategies = [
+            {
+                'name': 'Instagram Mobile',
+                'quality': 'best[ext=mp4]/best',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1'
+            },
+            {
+                'name': 'Instagram Desktop',
+                'quality': 'best/worst',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        ]
+        
+        for strategy in strategies:
+            try:
+                self.logger.info(f"Instagram strategy: {strategy['name']}")
+                
+                opts = {
+                    'format': strategy['quality'],
+                    'quiet': True,
+                    'no_warnings': True,
+                    'http_headers': {
+                        'User-Agent': strategy['agent'],
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    },
+                    'socket_timeout': 30,
+                    'max_filesize': MAX_CONTENT_LENGTH,
+                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
+                    'no_check_certificate': True
+                }
+                
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if not info:
+                        continue
+                        
+                    title = clean_filename(info.get('title', 'instagram_video'))
+                    opts['outtmpl']['default'] = os.path.join(temp_dir, f'{title}.%(ext)s')
+                    
+                    ydl.download([url])
+                    
+                    files = os.listdir(temp_dir)
+                    if files:
+                        file_path = os.path.join(temp_dir, files[0])
+                        if os.path.getsize(file_path) > 1024:
+                            return file_path, title
+                            
+            except Exception as e:
+                self.logger.warning(f"Instagram strategy {strategy['name']} failed: {e}")
+                continue
+                
+        raise Exception("All Instagram strategies failed")
+
+    def _facebook_download(self, url, quality, temp_dir):
+        """Facebook video indirme"""
+        self.logger.info("Facebook download started")
+        
+        strategies = [
+            {
+                'name': 'Facebook Mobile',
+                'quality': 'best[ext=mp4]/best',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1'
+            },
+            {
+                'name': 'Facebook Desktop',
+                'quality': 'best/worst',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            {
+                'name': 'Facebook Bot',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
+            }
+        ]
+        
+        for strategy in strategies:
+            try:
+                self.logger.info(f"Facebook strategy: {strategy['name']}")
+                
+                opts = {
+                    'format': strategy['quality'],
+                    'quiet': True,
+                    'no_warnings': True,
+                    'http_headers': {
+                        'User-Agent': strategy['agent'],
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    },
+                    'socket_timeout': 30,
+                    'max_filesize': MAX_CONTENT_LENGTH,
+                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
+                    'no_check_certificate': True,
+                    'ignore_errors': True
+                }
+                
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if not info:
+                        continue
+                        
+                    title = clean_filename(info.get('title', 'facebook_video'))
+                    opts['outtmpl']['default'] = os.path.join(temp_dir, f'{title}.%(ext)s')
+                    
+                    ydl.download([url])
+                    
+                    files = os.listdir(temp_dir)
+                    if files:
+                        file_path = os.path.join(temp_dir, files[0])
+                        if os.path.getsize(file_path) > 1024:
+                            return file_path, title
+                            
+            except Exception as e:
+                self.logger.warning(f"Facebook strategy {strategy['name']} failed: {e}")
+                continue
+                
+        raise Exception("All Facebook strategies failed")
+
+    def _tiktok_download(self, url, quality, temp_dir):
+        """TikTok video indirme"""
+        self.logger.info("TikTok download started")
+        
+        strategies = [
+            {
+                'name': 'TikTok Mobile',
+                'quality': 'best[ext=mp4]/best',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1'
+            },
+            {
+                'name': 'TikTok Desktop',
+                'quality': 'best/worst',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        ]
+        
+        for strategy in strategies:
+            try:
+                self.logger.info(f"TikTok strategy: {strategy['name']}")
+                
+                opts = {
+                    'format': strategy['quality'],
+                    'quiet': True,
+                    'no_warnings': True,
+                    'http_headers': {
+                        'User-Agent': strategy['agent'],
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    },
+                    'socket_timeout': 30,
+                    'max_filesize': MAX_CONTENT_LENGTH,
+                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
+                    'no_check_certificate': True
+                }
+                
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if not info:
+                        continue
+                        
+                    title = clean_filename(info.get('title', 'tiktok_video'))
+                    opts['outtmpl']['default'] = os.path.join(temp_dir, f'{title}.%(ext)s')
+                    
+                    ydl.download([url])
+                    
+                    files = os.listdir(temp_dir)
+                    if files:
+                        file_path = os.path.join(temp_dir, files[0])
+                        if os.path.getsize(file_path) > 1024:
+                            return file_path, title
+                            
+            except Exception as e:
+                self.logger.warning(f"TikTok strategy {strategy['name']} failed: {e}")
+                continue
+                
+        raise Exception("All TikTok strategies failed")
+
+    def _twitter_download(self, url, quality, temp_dir):
+        """Twitter/X video indirme"""
+        self.logger.info("Twitter download started")
+        
+        strategies = [
+            {
+                'name': 'Twitter Mobile',
+                'quality': 'best[ext=mp4]/best',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1'
+            },
+            {
+                'name': 'Twitter Desktop',
+                'quality': 'best/worst',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+        ]
+        
+        for strategy in strategies:
+            try:
+                self.logger.info(f"Twitter strategy: {strategy['name']}")
+                
+                opts = {
+                    'format': strategy['quality'],
+                    'quiet': True,
+                    'no_warnings': True,
+                    'http_headers': {
+                        'User-Agent': strategy['agent'],
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    },
+                    'socket_timeout': 30,
+                    'max_filesize': MAX_CONTENT_LENGTH,
+                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
+                    'no_check_certificate': True
+                }
+                
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if not info:
+                        continue
+                        
+                    title = clean_filename(info.get('title', 'twitter_video'))
+                    opts['outtmpl']['default'] = os.path.join(temp_dir, f'{title}.%(ext)s')
+                    
+                    ydl.download([url])
+                    
+                    files = os.listdir(temp_dir)
+                    if files:
+                        file_path = os.path.join(temp_dir, files[0])
+                        if os.path.getsize(file_path) > 1024:
+                            return file_path, title
+                            
+            except Exception as e:
+                self.logger.warning(f"Twitter strategy {strategy['name']} failed: {e}")
+                continue
+                
+        raise Exception("All Twitter strategies failed")
+
     def _generic_download(self, url, quality, temp_dir):
         """Diğer platformlar için basit indirme"""
         opts = {
@@ -210,9 +468,9 @@ class SimpleDownloader:
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '3.1-bot-bypass',
+        'version': '3.2-multi-platform',
         'status': 'running',
-        'supported_platforms': ['YouTube', 'Generic']
+        'supported_platforms': ['YouTube', 'Instagram', 'Facebook', 'TikTok', 'Twitter/X', 'Generic']
     })
 
 @app.route('/health')
@@ -284,7 +542,8 @@ def download_video():
         }), 500
 
 if __name__ == '__main__':
-    logger.info(f"Starting ReelDrop API v3.0-minimal on port {PORT}")
+    logger.info(f"Starting ReelDrop API v3.2-multi-platform on port {PORT}")
+    logger.info("Supported platforms: YouTube, Instagram, Facebook, TikTok, Twitter/X")
     
     app.run(
         host='0.0.0.0',
