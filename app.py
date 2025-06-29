@@ -13,7 +13,8 @@ import re
 import threading
 import unicodedata
 from datetime import datetime
-from urllib.parse import quote
+import requests
+from urllib.parse import quote, unquote, urlparse, parse_qs
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 import yt_dlp
@@ -83,7 +84,59 @@ def guvenli_dosya_adi_olustur(baslik):
     
     return guvenli_baslik[:40] if guvenli_baslik else "video"
 
-def rfc5987_kodla(baslik):
+def facebook_url_resolver(url):
+    """Facebook share URL'lerini gerçek video URL'lerine çevirir"""
+    try:
+        # Facebook share URL'lerini resolve et
+        if 'facebook.com/share' in url or 'fb.watch' in url:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
+            }
+            
+            # URL'yi takip et ve gerçek URL'yi bul
+            response = requests.get(url, headers=headers, allow_redirects=True, timeout=10)
+            final_url = response.url
+            
+            # Facebook video URL formatlarını kontrol et
+            if 'facebook.com' in final_url and ('video' in final_url or 'watch' in final_url):
+                return final_url
+            
+            # HTML içinde video URL'sini ara
+            html_content = response.text
+            import re
+            
+            # Farklı Facebook video URL pattern'larını ara
+            patterns = [
+                r'https://www\.facebook\.com/[^/]+/videos/\d+',
+                r'https://www\.facebook\.com/watch/\?v=\d+',
+                r'https://facebook\.com/[^/]+/videos/\d+',
+                r'https://facebook\.com/watch/\?v=\d+',
+                r'"videoId":"(\d+)"',
+                r'"video_id":"(\d+)"'
+            ]
+            
+            for pattern in patterns:
+                matches = re.findall(pattern, html_content)
+                if matches:
+                    if 'videoId' in pattern or 'video_id' in pattern:
+                        # Video ID bulundu, URL oluştur
+                        video_id = matches[0]
+                        return f"https://www.facebook.com/watch/?v={video_id}"
+                    else:
+                        return matches[0]
+            
+            return final_url
+        
+        return url
+        
+    except Exception as e:
+        logger.warning(f"Facebook URL resolve failed: {e}")
+        return url
     """RFC 5987 standardına göre dosya adını kodlar (alternatif çözüm)"""
     if not baslik:
         return "filename=video.mp4"
@@ -315,17 +368,37 @@ class QuickDownloader:
         raise Exception("All Instagram strategies failed")
 
     def _facebook_quick(self, url, quality, temp_dir):
-        """Facebook video indirme"""
+        """Facebook video indirme - gelişmiş URL çözümleme"""
+        
+        # Önce URL'yi resolve et
+        resolved_url = facebook_url_resolver(url)
+        self.logger.info(f"Original URL: {url}")
+        self.logger.info(f"Resolved URL: {resolved_url}")
+        
         strategies = [
+            {
+                'name': 'Facebook Direct',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'quality': 'best[ext=mp4]/best',
+                'url': resolved_url
+            },
             {
                 'name': 'Facebook Mobile',
                 'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
-                'quality': 'best[ext=mp4]/best'
+                'quality': 'best[ext=mp4]/best',
+                'url': resolved_url
             },
             {
-                'name': 'Facebook Desktop',
+                'name': 'Facebook Original',
                 'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'quality': 'best/worst'
+                'quality': 'best/worst',
+                'url': url  # Orijinal URL'yi de dene
+            },
+            {
+                'name': 'Facebook Generic',
+                'agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+                'quality': 'worst[ext=mp4]/worst',
+                'url': resolved_url
             }
         ]
         
@@ -346,31 +419,38 @@ class QuickDownloader:
                         'Upgrade-Insecure-Requests': '1',
                         'Sec-Fetch-Dest': 'document',
                         'Sec-Fetch-Mode': 'navigate',
-                        'Sec-Fetch-Site': 'none'
+                        'Sec-Fetch-Site': 'none',
+                        'Cache-Control': 'no-cache'
                     },
                     'socket_timeout': 30,
-                    'extractor_retries': 2,
+                    'extractor_retries': 3,
                     'max_filesize': MAX_CONTENT_LENGTH,
                     'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
                     'no_check_certificate': True,
-                    'ignore_errors': True
+                    'ignore_errors': False,
+                    'extract_flat': False
                 }
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
+                    # Önce info extraction dene
+                    info = ydl.extract_info(strategy['url'], download=False)
                     if not info:
+                        self.logger.warning(f"No info extracted for {strategy['name']}")
                         continue
                         
                     orijinal_baslik = info.get('title', 'facebook_video')
                     temiz_baslik = self._clean_title(orijinal_baslik)
                     
+                    # Download
                     opts['outtmpl']['default'] = os.path.join(temp_dir, f'{temiz_baslik}.%(ext)s')
-                    ydl.download([url])
+                    ydl.download([strategy['url']])
                     
+                    # Check file
                     files = os.listdir(temp_dir)
                     if files:
                         file_path = os.path.join(temp_dir, files[0])
                         if os.path.getsize(file_path) > 1024:
+                            self.logger.info(f"Facebook download successful: {file_path}")
                             return file_path, orijinal_baslik, temiz_baslik
                             
             except Exception as e:
