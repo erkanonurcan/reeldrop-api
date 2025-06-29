@@ -99,19 +99,31 @@ class SimpleDownloader:
     def _youtube_download(self, url, quality, temp_dir):
         strategies = [
             {
-                'name': 'iOS',
+                'name': 'TV Client',
                 'quality': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
-                'agent': USER_AGENTS[0],
-                'args': {'youtube': {'skip': ['dash'], 'player_client': ['ios']}}
+                'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1',
+                'args': {'youtube': {'player_client': ['tv_html5', 'tv'], 'skip': ['dash']}}
             },
             {
-                'name': 'Android',
+                'name': 'Embed Bypass',
                 'quality': 'best[height<=480][ext=mp4]/worst[ext=mp4]/best',
-                'agent': USER_AGENTS[1],
-                'args': {'youtube': {'player_client': ['android']}}
+                'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'args': {'youtube': {'player_client': ['embed', 'android_embedded'], 'skip': ['dash', 'hls']}}
             },
             {
-                'name': 'Web',
+                'name': 'Age Gate Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (Linux; Android 11; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
+                'args': {'youtube': {'player_client': ['android_testsuite'], 'skip': ['dash', 'hls']}}
+            },
+            {
+                'name': 'iOS Fallback',
+                'quality': 'best[height<=720]/best',
+                'agent': USER_AGENTS[0],
+                'args': {'youtube': {'player_client': ['ios', 'mweb'], 'skip': ['dash']}}
+            },
+            {
+                'name': 'Generic',
                 'quality': 'best/worst',
                 'agent': USER_AGENTS[2],
                 'args': {}
@@ -126,11 +138,21 @@ class SimpleDownloader:
                     'format': strategy['quality'],
                     'quiet': True,
                     'no_warnings': True,
-                    'http_headers': {'User-Agent': strategy['agent']},
+                    'http_headers': {
+                        'User-Agent': strategy['agent'],
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'DNT': '1',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    },
                     'extractor_args': strategy['args'],
                     'socket_timeout': 30,
                     'max_filesize': MAX_CONTENT_LENGTH,
-                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')}
+                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
+                    'age_limit': 18,
+                    'no_check_certificate': True
                 }
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
@@ -188,7 +210,7 @@ class SimpleDownloader:
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '3.0-minimal',
+        'version': '3.1-bot-bypass',
         'status': 'running',
         'supported_platforms': ['YouTube', 'Generic']
     })
