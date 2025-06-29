@@ -77,7 +77,7 @@ class EnhancedVideoDownloader:
         return cleaned
 
     def create_debug_opts(self, platform, quality):
-        """Debug için minimal yt-dlp ayarları"""
+        """Debug için minimal yt-dlp ayarları - YouTube bot bypass eklendi"""
         opts = {
             'format': quality,
             'quiet': False,  # Sessiz modu kapat
@@ -89,50 +89,92 @@ class EnhancedVideoDownloader:
             'no_check_certificate': True,
             'extract_flat': False,
             
-            # Temel HTTP ayarları
+            # Bot bypass için gelişmiş HTTP ayarları
             'http_headers': {
                 'User-Agent': random.choice(USER_AGENTS),
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-us,en;q=0.5',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
                 'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Cache-Control': 'max-age=0',
             },
             
-            # Retry ayarları
-            'extractor_retries': 3,
-            'fragment_retries': 3,
-            'socket_timeout': 30,
+            # Retry ayarları - artırıldı
+            'extractor_retries': 5,
+            'fragment_retries': 5,
+            'socket_timeout': 60,
+            
+            # Bot bypass için gecikme
+            'sleep_interval': 1,
+            'max_sleep_interval': 3,
         }
         
-        # Platform özel ayarlar
+        # Platform özel ayarlar - YouTube için gelişmiş bypass
         if platform == 'youtube':
             opts.update({
                 'extractor_args': {
                     'youtube': {
-                        'skip': ['dash'],  # Sadece dash'i skip et
-                        'player_client': ['web'],
+                        'skip': ['dash', 'hls'],  # Daha agresif skip
+                        'player_client': ['web', 'android'],  # Multiple clients
+                        'player_skip': ['configs', 'webpage'],
+                        'innertube_host': 'studio.youtube.com',
                     }
-                }
+                },
+                # YouTube için özel format seçimi
+                'format_sort': ['res:720', 'ext:mp4:m4a'],
+                'format_sort_force': True,
             })
         
         self.logger.debug(f"Debug opts created for {platform}: {json.dumps(opts, indent=2, default=str)}")
         return opts
 
     def test_basic_extraction(self, url):
-        """Temel bilgi çıkarma testi"""
+        """Temel bilgi çıkarma testi - YouTube için bypass eklendi"""
         try:
             self.logger.info(f"Testing basic extraction for: {url}")
             
-            # En minimal ayarlar
-            opts = {
-                'quiet': False,
-                'no_warnings': False,
-                'extract_flat': False,
-                'skip_download': True,  # Sadece info çıkar
-                'logger': self.DebugLogger(self.logger),
-                'outtmpl': {
-                    'default': '%(title)s.%(ext)s'
+            platform = self.detect_platform(url)
+            
+            # YouTube için özel test ayarları
+            if platform == 'youtube':
+                opts = {
+                    'quiet': True,  # YouTube için sessiz mod
+                    'no_warnings': True,
+                    'extract_flat': False,
+                    'skip_download': True,
+                    'logger': self.DebugLogger(self.logger),
+                    'outtmpl': {
+                        'default': '%(title)s.%(ext)s'
+                    },
+                    # Minimal bot bypass
+                    'http_headers': {
+                        'User-Agent': random.choice(USER_AGENTS),
+                        'Accept-Language': 'en-US,en;q=0.9',
+                    },
+                    'extractor_args': {
+                        'youtube': {
+                            'skip': ['dash'],
+                            'player_client': ['web'],
+                        }
+                    },
+                    'socket_timeout': 30,
                 }
-            }
+            else:
+                # Diğer platformlar için normal ayarlar
+                opts = {
+                    'quiet': False,
+                    'no_warnings': False,
+                    'extract_flat': False,
+                    'skip_download': True,
+                    'logger': self.DebugLogger(self.logger),
+                    'outtmpl': {
+                        'default': '%(title)s.%(ext)s'
+                    }
+                }
             
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -156,7 +198,7 @@ class EnhancedVideoDownloader:
             return {'success': False, 'error': str(e), 'traceback': traceback.format_exc()}
 
     def download_video(self, url, quality='best[height<=720]/best'):
-        """Ana indirme fonksiyonu - gelişmiş debug ile"""
+        """Ana indirme fonksiyonu - YouTube bot bypass logic eklendi"""
         temp_dir = tempfile.mkdtemp()
         self.logger.info(f"Starting download process. URL: {url}, Quality: {quality}")
         self.logger.info(f"Temp directory: {temp_dir}")
@@ -165,15 +207,12 @@ class EnhancedVideoDownloader:
             # 1. Platform algıla
             platform = self.detect_platform(url)
             
-            # 2. Temel çıkarma testi
-            extraction_test = self.test_basic_extraction(url)
-            if not extraction_test['success']:
-                raise Exception(f"Basic extraction failed: {extraction_test['error']}")
-            
-            self.logger.info(f"Basic extraction test passed: {extraction_test}")
-            
-            # 3. Download dene
-            return self._attempt_download_with_debug(url, quality, platform, temp_dir)
+            # 2. YouTube için özel işlem
+            if platform == 'youtube':
+                return self._handle_youtube_download(url, quality, temp_dir)
+            else:
+                # 3. Diğer platformlar için normal işlem
+                return self._handle_other_platform_download(url, quality, platform, temp_dir)
             
         except Exception as e:
             self.logger.error(f"Download process failed: {str(e)}")
@@ -181,8 +220,97 @@ class EnhancedVideoDownloader:
             shutil.rmtree(temp_dir, ignore_errors=True)
             raise e
 
+    def _handle_youtube_download(self, url, quality, temp_dir):
+        """YouTube için özel bot bypass download logic"""
+        self.logger.info("YouTube detected - using enhanced bot bypass")
+        
+        # YouTube için alternatif stratejiler
+        strategies = [
+            {
+                'name': 'Minimal Stealth',
+                'quality': 'worst[ext=mp4]/worst',
+                'delay': 2
+            },
+            {
+                'name': 'Standard Quality',
+                'quality': 'best[height<=480][ext=mp4]/best[ext=mp4]',
+                'delay': 3
+            },
+            {
+                'name': 'Original Quality', 
+                'quality': quality,
+                'delay': 4
+            }
+        ]
+        
+        for strategy in strategies:
+            try:
+                self.logger.info(f"Trying YouTube strategy: {strategy['name']}")
+                
+                # Bot algılamasını geciktirmek için bekleme
+                time.sleep(random.uniform(1, strategy['delay']))
+                
+                opts = self.create_debug_opts('youtube', strategy['quality'])
+                opts['outtmpl'] = {
+                    'default': os.path.join(temp_dir, '%(title)s.%(ext)s')
+                }
+                
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    # Info extraction
+                    self.logger.info("Extracting YouTube video info...")
+                    info = ydl.extract_info(url, download=False)
+                    
+                    if not info:
+                        raise Exception("Could not extract YouTube video info")
+                    
+                    title = self.clean_title(info.get('title', 'video'))
+                    self.logger.info(f"YouTube video info extracted: {title}")
+                    
+                    # Download
+                    opts['outtmpl'] = {
+                        'default': os.path.join(temp_dir, f'{title}.%(ext)s')
+                    }
+                    
+                    self.logger.info("Starting YouTube download...")
+                    ydl.download([url])
+                    
+                    # Dosya kontrolü
+                    files = os.listdir(temp_dir)
+                    if files:
+                        file_path = os.path.join(temp_dir, files[0])
+                        file_size = os.path.getsize(file_path)
+                        self.logger.info(f"YouTube download successful! Size: {file_size} bytes")
+                        return file_path, title
+                    
+            except yt_dlp.DownloadError as e:
+                error_msg = str(e).lower()
+                if 'sign in' in error_msg or 'bot' in error_msg:
+                    self.logger.warning(f"YouTube bot detection for strategy '{strategy['name']}', trying next...")
+                    continue
+                else:
+                    self.logger.warning(f"YouTube strategy '{strategy['name']}' failed: {e}")
+                    continue
+            except Exception as e:
+                self.logger.warning(f"YouTube strategy '{strategy['name']}' error: {e}")
+                continue
+        
+        # Tüm YouTube stratejileri başarısız
+        raise Exception("YouTube video protected by bot detection - please try a different video or platform")
+
+    def _handle_other_platform_download(self, url, quality, platform, temp_dir):
+        """Diğer platformlar için normal download - mevcut working logic"""
+        # Temel çıkarma testi (mevcut kod)
+        extraction_test = self.test_basic_extraction(url)
+        if not extraction_test['success']:
+            raise Exception(f"Basic extraction failed: {extraction_test['error']}")
+        
+        self.logger.info(f"Basic extraction test passed: {extraction_test}")
+        
+        # Download dene (mevcut kod)
+        return self._attempt_download_with_debug(url, quality, platform, temp_dir)
+
     def _attempt_download_with_debug(self, url, quality, platform, temp_dir):
-        """Debug bilgileri ile indirme denemesi"""
+        """Debug bilgileri ile indirme denemesi - mevcut working code"""
         
         # Çeşitli kalite seçenekleri dene
         quality_options = [
@@ -296,12 +424,12 @@ class EnhancedVideoDownloader:
         def error(self, msg):
             self.logger.error(f"yt-dlp: {msg}")
 
-# API Endpoints
+# API Endpoints - Mevcut working endpoints
 @app.route('/')
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '2.4-debug',
+        'version': '2.4-enhanced',
         'status': 'running',
         'environment': 'Railway' if IS_RAILWAY else 'Local',
         'debug_mode': True,
@@ -309,6 +437,7 @@ def home():
         'python_version': sys.version,
         'features': [
             'Enhanced debugging',
+            'YouTube bot bypass',
             'Multiple quality fallback',
             'Detailed error reporting',
             'Platform-specific optimization'
@@ -329,6 +458,7 @@ def health():
         'environment': 'Railway' if IS_RAILWAY else 'Local',
         'yt_dlp_version': yt_dlp.version.__version__,
         'debug_mode': True,
+        'youtube_bypass': True,
         'timestamp': datetime.utcnow().isoformat() + 'Z'
     })
 
@@ -440,33 +570,44 @@ def download_video():
         
         logger.error(f"[{request_id}] Download failed: {error_details}")
         
-        # Kullanıcı dostu hata mesajı
-        if 'bot' in str(e).lower() or 'sign in' in str(e).lower():
-            user_message = 'Video bot koruması nedeniyle indirilemedi'
-            error_code = 'BOT_DETECTED'
-        elif 'format' in str(e).lower():
+        # Gelişmiş kullanıcı dostu hata mesajları
+        error_msg = str(e).lower()
+        if 'bot' in error_msg or 'sign in' in error_msg:
+            user_message = 'YouTube video bot koruması nedeniyle indirilemedi'
+            error_code = 'YOUTUBE_BOT_PROTECTION'
+            suggestion = 'Instagram, TikTok veya Facebook videolarını deneyin'
+        elif 'protected' in error_msg:
+            user_message = 'Video korunuyor ve indirilemez'
+            error_code = 'VIDEO_PROTECTED'
+            suggestion = 'Farklı bir video deneyin'
+        elif 'format' in error_msg:
             user_message = 'Video formatı desteklenmiyor'
             error_code = 'FORMAT_ERROR'
-        elif 'private' in str(e).lower() or 'unavailable' in str(e).lower():
+            suggestion = 'Farklı kalite seçeneği deneyin'
+        elif 'private' in error_msg or 'unavailable' in error_msg:
             user_message = 'Video mevcut değil veya özel'
             error_code = 'VIDEO_UNAVAILABLE'
+            suggestion = 'Video URL\'sini kontrol edin'
         else:
             user_message = 'Video indirilemedi'
             error_code = 'DOWNLOAD_ERROR'
+            suggestion = 'Farklı bir platform veya video deneyin'
         
         return jsonify({
             'error': user_message,
             'success': False,
             'code': error_code,
+            'suggestion': suggestion,
             'debug_info': error_details,
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         }), 500
 
 if __name__ == '__main__':
-    logger.info(f"Starting ReelDrop API v2.4-debug on port {PORT}")
+    logger.info(f"Starting ReelDrop API v2.4-enhanced on port {PORT}")
     logger.info(f"Environment: {'Railway' if IS_RAILWAY else 'Local'}")
     logger.info(f"yt-dlp version: {yt_dlp.version.__version__}")
     logger.info(f"Python version: {sys.version}")
+    logger.info("YouTube bot bypass strategies enabled")
     
     app.run(
         host='0.0.0.0',
