@@ -261,6 +261,13 @@ class SimpleDownloader:
                 'use_proxy': False
             },
             {
+                'name': 'Ultra Simple',
+                'quality': 'worst',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'args': {},
+                'use_proxy': False
+            },
+            {
                 'name': 'Last Resort',
                 'quality': 'worst/best',
                 'agent': 'yt-dlp/2024.12.13',
@@ -296,10 +303,7 @@ class SimpleDownloader:
                     'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
                     'no_check_certificate': True,
                     'extract_flat': False,
-                    'geo_bypass': True,
-                    'geo_bypass_country': ['US', 'GB', 'CA'],
-                    'sleep_interval': 0,
-                    'max_sleep_interval': 0
+                    'geo_bypass': True
                 }
                 
                 # Proxy kullan eğer strategy'de belirtilmişse
@@ -310,6 +314,15 @@ class SimpleDownloader:
                         opts['proxy'] = proxy['http']
                     else:
                         self.logger.warning("No proxy available, using direct connection")
+                
+                # Ultra Simple strateji için minimal options
+                if strategy['name'] == 'Ultra Simple':
+                    opts = {
+                        'format': 'worst',
+                        'quiet': True,
+                        'http_headers': {'User-Agent': strategy['agent']},
+                        'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')}
+                    }
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=False)
@@ -328,7 +341,8 @@ class SimpleDownloader:
                             return file_path, title
                             
             except Exception as e:
-                self.logger.warning(f"Strategy {strategy['name']} failed: {e}")
+                self.logger.warning(f"Strategy {strategy['name']} failed: {str(e)}")
+                self.logger.debug(f"Strategy {strategy['name']} full error: {type(e).__name__}: {e}")
                 continue
                 
         raise Exception("All YouTube strategies failed")
