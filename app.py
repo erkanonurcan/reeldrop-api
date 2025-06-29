@@ -86,6 +86,10 @@ def guvenli_dosya_adi_olustur(baslik):
 
 def facebook_url_resolver(url):
     """Facebook share URL'lerini gerçek video URL'lerine çevirir"""
+    if not REQUESTS_AVAILABLE:
+        logger.warning("requests not available, returning original URL")
+        return url
+        
     try:
         # Facebook share URL'lerini resolve et
         if 'facebook.com/share' in url or 'fb.watch' in url:
@@ -108,7 +112,6 @@ def facebook_url_resolver(url):
             
             # HTML içinde video URL'sini ara
             html_content = response.text
-            import re
             
             # Farklı Facebook video URL pattern'larını ara
             patterns = [
