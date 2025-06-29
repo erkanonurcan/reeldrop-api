@@ -11,7 +11,9 @@ import time
 import sys
 import re
 import threading
+import unicodedata
 from datetime import datetime
+from urllib.parse import quote
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 import yt_dlp
@@ -40,6 +42,60 @@ USER_AGENTS = [
 
 class TimeoutError(Exception):
     pass
+
+def turkce_karakterleri_temizle(metin):
+    """Türkçe karakterleri İngilizce karşılıklarıyla değiştirir"""
+    if not metin:
+        return "video"
+    
+    # Türkçe karakter haritası
+    turkce_harfler = {
+        'ı': 'i', 'İ': 'I', 'ğ': 'g', 'Ğ': 'G',
+        'ü': 'u', 'Ü': 'U', 'ş': 's', 'Ş': 'S',
+        'ö': 'o', 'Ö': 'O', 'ç': 'c', 'Ç': 'C'
+    }
+    
+    # Türkçe karakterleri değiştir
+    for tr_harf, en_harf in turkce_harfler.items():
+        metin = metin.replace(tr_harf, en_harf)
+    
+    # Regex hatasını düzelt: \s- yerine \w\s\-\. kullan
+    metin = re.sub(r'[^\w\s\-\.]', '', metin)
+    metin = re.sub(r'\s+', '_', metin.strip())
+    
+    return metin[:50]  # Maksimum 50 karakter
+
+def guvenli_dosya_adi_olustur(baslik):
+    """HTTP header'ında güvenli kullanılabilecek dosya adı oluşturur"""
+    if not baslik:
+        return "video"
+    
+    # Önce Türkçe karakterleri temizle
+    temiz_baslik = turkce_karakterleri_temizle(baslik)
+    
+    # ASCII'ye çevir ve özel karakterleri kaldır
+    ascii_baslik = unicodedata.normalize('NFKD', temiz_baslik)
+    ascii_baslik = ascii_baslik.encode('ascii', 'ignore').decode('ascii')
+    
+    # Sadece güvenli karakterleri bırak - regex hatasını düzelt
+    guvenli_baslik = re.sub(r'[^\w\s\-\.]', '', ascii_baslik)
+    guvenli_baslik = re.sub(r'\s+', '_', guvenli_baslik.strip())
+    
+    return guvenli_baslik[:40] if guvenli_baslik else "video"
+
+def rfc5987_kodla(baslik):
+    """RFC 5987 standardına göre dosya adını kodlar (alternatif çözüm)"""
+    if not baslik:
+        return "filename=video.mp4"
+    
+    try:
+        # UTF-8 olarak kodla
+        encoded_baslik = quote(baslik.encode('utf-8'))
+        return f"filename*=UTF-8''{encoded_baslik}.mp4"
+    except:
+        # Hata durumunda güvenli versiyonu kullan
+        guvenli_ad = guvenli_dosya_adi_olustur(baslik)
+        return f"filename={guvenli_ad}.mp4"
 
 class QuickDownloader:
     def __init__(self):
@@ -82,19 +138,25 @@ class QuickDownloader:
             raise e
 
     def _youtube_quick(self, url, quality, temp_dir):
-        """Hızlı YouTube indirme - sadece 2 strateji"""
+        """Hızlı YouTube indirme - daha esnek format seçimi"""
         strategies = [
             {
                 'name': 'Mobile',
-                'quality': 'worst[ext=mp4]/worst',
+                'quality': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
                 'agent': USER_AGENTS[0],
                 'args': {'youtube': {'skip': ['dash', 'hls'], 'player_client': ['ios']}}
             },
             {
                 'name': 'Desktop',  
-                'quality': 'best[height<=480]/best',
+                'quality': 'best[height<=480][ext=mp4]/best[height<=720]/best',
                 'agent': USER_AGENTS[2],
                 'args': {'youtube': {'skip': ['dash'], 'player_client': ['web']}}
+            },
+            {
+                'name': 'Generic',
+                'quality': 'best/worst',
+                'agent': USER_AGENTS[1],
+                'args': {}
             }
         ]
         
@@ -121,10 +183,13 @@ class QuickDownloader:
                     if not info:
                         continue
                         
-                    title = self._clean_title(info.get('title', 'video'))
+                    # Orijinal başlığı kaydet
+                    orijinal_baslik = info.get('title', 'video')
+                    # Güvenli dosya adı oluştur
+                    temiz_baslik = self._clean_title(orijinal_baslik)
                     
                     # Update output path
-                    opts['outtmpl']['default'] = os.path.join(temp_dir, f'{title}.%(ext)s')
+                    opts['outtmpl']['default'] = os.path.join(temp_dir, f'{temiz_baslik}.%(ext)s')
                     
                     # Download
                     ydl.download([url])
@@ -134,7 +199,8 @@ class QuickDownloader:
                     if files:
                         file_path = os.path.join(temp_dir, files[0])
                         if os.path.getsize(file_path) > 1024:
-                            return file_path, title
+                            # Hem orijinal hem de temiz başlığı döndür
+                            return file_path, orijinal_baslik, temiz_baslik
                             
             except Exception as e:
                 self.logger.warning(f"Strategy {strategy['name']} failed: {e}")
@@ -160,32 +226,32 @@ class QuickDownloader:
             if not info:
                 raise Exception("Could not extract video info")
                 
-            title = self._clean_title(info.get('title', 'video'))
-            opts['outtmpl']['default'] = os.path.join(temp_dir, f'{title}.%(ext)s')
+            orijinal_baslik = info.get('title', 'video')
+            temiz_baslik = self._clean_title(orijinal_baslik)
+            opts['outtmpl']['default'] = os.path.join(temp_dir, f'{temiz_baslik}.%(ext)s')
             
             ydl.download([url])
             
             files = os.listdir(temp_dir)
             if files:
-                return os.path.join(temp_dir, files[0]), title
+                return os.path.join(temp_dir, files[0]), orijinal_baslik, temiz_baslik
                 
         raise Exception("Download failed")
 
     def _clean_title(self, title):
-        if not title:
-            return "video"
-        return "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).replace(' ', '_')[:30]
+        """Dosya sistemi için güvenli başlık oluştur"""
+        return guvenli_dosya_adi_olustur(title)
 
 # API Endpoints
 @app.route('/')
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '2.6-timeout-fixed',
+        'version': '2.7-turkish-fixed',
         'status': 'running',
         'max_download_time': f'{DOWNLOAD_TIMEOUT}s',
         'max_file_size': f'{MAX_CONTENT_LENGTH // (1024*1024)}MB',
-        'features': ['Fast YouTube bypass', 'Timeout protection', 'Memory optimization']
+        'features': ['Fast YouTube bypass', 'Timeout protection', 'Memory optimization', 'Turkish character support']
     })
 
 @app.route('/health')
@@ -215,7 +281,16 @@ def download_video():
         downloader = QuickDownloader()
         
         try:
-            file_path, title = downloader.download_with_timeout(url, quality, DOWNLOAD_TIMEOUT)
+            # Artık 3 değer dönüyor: file_path, orijinal_baslik, temiz_baslik
+            download_result = downloader.download_with_timeout(url, quality, DOWNLOAD_TIMEOUT)
+            
+            if len(download_result) == 3:
+                file_path, orijinal_baslik, temiz_baslik = download_result
+            else:
+                # Eski format uyumluluğu
+                file_path, orijinal_baslik = download_result
+                temiz_baslik = guvenli_dosya_adi_olustur(orijinal_baslik)
+                
         except TimeoutError:
             return jsonify({
                 'error': f'Download timeout after {DOWNLOAD_TIMEOUT} seconds',
@@ -228,7 +303,7 @@ def download_video():
         temp_dir = os.path.dirname(file_path)
         processing_time = round(time.time() - start_time, 2)
         
-        logger.info(f"[{request_id}] Success: {title} ({file_size} bytes, {processing_time}s)")
+        logger.info(f"[{request_id}] Success: {orijinal_baslik} -> {temiz_baslik} ({file_size} bytes, {processing_time}s)")
         
         # Streaming response with cleanup
         def generate():
@@ -245,15 +320,19 @@ def download_video():
                 except:
                     pass
         
+        # Güvenli dosya adını header için kullan
+        guvenli_dosya_adi = guvenli_dosya_adi_olustur(orijinal_baslik)
+        
         return Response(
             stream_with_context(generate()),
             content_type='video/mp4',
             headers={
                 'Content-Length': str(file_size),
-                'Content-Disposition': f'attachment; filename="{title}.mp4"',
+                'Content-Disposition': f'attachment; filename="{guvenli_dosya_adi}.mp4"',
                 'Cache-Control': 'no-cache',
                 'X-Processing-Time': str(processing_time),
-                'X-Request-ID': request_id
+                'X-Request-ID': request_id,
+                'X-Original-Title': guvenli_dosya_adi_olustur(orijinal_baslik)  # Güvenli versiyon
             }
         )
         
@@ -291,9 +370,10 @@ def before_request():
     request.environ.setdefault('wsgi.url_scheme', 'https')
 
 if __name__ == '__main__':
-    logger.info(f"Starting ReelDrop API v2.6 on port {PORT}")
+    logger.info(f"Starting ReelDrop API v2.7 on port {PORT}")
     logger.info(f"Download timeout: {DOWNLOAD_TIMEOUT}s")
     logger.info(f"Max file size: {MAX_CONTENT_LENGTH // (1024*1024)}MB")
+    logger.info("Turkish character support: ENABLED")
     
     app.run(
         host='0.0.0.0',
