@@ -6,19 +6,20 @@ import logging
 import tempfile
 import shutil
 import json
-import base64
 import random
 import time
 import traceback
 import sys
+import requests
+import re
 from datetime import datetime
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 import yt_dlp
 
-# Log Yapılandırması - Daha detaylı
+# Log Yapılandırması
 logging.basicConfig(
-    level=logging.DEBUG,  # DEBUG seviyesine çıkarıldı
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(sys.stdout),
@@ -33,391 +34,385 @@ CORS(app)
 # Ortam Değişkenleri
 IS_RAILWAY = os.environ.get('RAILWAY_ENVIRONMENT', '').lower() == 'production'
 PORT = int(os.environ.get('PORT', 8000))
-MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB
+MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
-# Enhanced User Agents
-USER_AGENTS = [
+# Ultra Enhanced User Agents - Daha çeşitli
+RESIDENTIAL_USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0'
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15'
 ]
 
-class EnhancedVideoDownloader:
+# Free proxy listesi (isteğe bağlı - çalışan proxy'ler eklenebilir)
+FREE_PROXIES = [
+    # Buraya çalışan free proxy'ler eklenebilir
+    # Format: {'type': 'http', 'proxy': 'ip:port', 'auth': None}
+]
+
+class YouTubeUltimateBypass:
     def __init__(self):
         self.logger = logger
-        self.logger.info("VideoDownloader initialized")
+        self.session_cookies = {}
+        self.failed_strategies = set()
+        self.logger.info("YouTube Ultimate Bypass initialized")
 
     def detect_platform(self, url):
         """URL'den platform türünü algılar"""
         url_lower = url.lower()
-        platform = 'unknown'
         
         if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
-            platform = 'youtube'
+            return 'youtube'
         elif 'instagram.com' in url_lower or 'instagr.am' in url_lower:
-            platform = 'instagram'
+            return 'instagram'
         elif 'tiktok.com' in url_lower:
-            platform = 'tiktok'
+            return 'tiktok'
         elif 'facebook.com' in url_lower or 'fb.watch' in url_lower:
-            platform = 'facebook'
+            return 'facebook'
         elif 'twitter.com' in url_lower or 'x.com' in url_lower:
-            platform = 'twitter'
+            return 'twitter'
         
-        self.logger.info(f"Platform detected: {platform} for URL: {url}")
-        return platform
+        return 'unknown'
 
     def clean_title(self, title):
         """Video başlığını temizler"""
         if not title:
             return "video"
         cleaned = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).replace(' ', '_')[:50]
-        self.logger.debug(f"Title cleaned: '{title}' -> '{cleaned}'")
         return cleaned
 
-    def create_debug_opts(self, platform, quality):
-        """Debug için minimal yt-dlp ayarları - YouTube bot bypass eklendi"""
+    def get_youtube_strategies(self):
+        """YouTube için farklı bypass stratejileri"""
+        return [
+            {
+                'name': 'mobile_stealth',
+                'description': 'Mobile device simulation',
+                'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+                'quality': 'worst[ext=mp4]/worst',
+                'headers': {
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.5',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                },
+                'extractor_args': {
+                    'youtube': {
+                        'skip': ['dash', 'hls'],
+                        'player_client': ['android'],
+                        'player_skip': ['configs', 'webpage'],
+                    }
+                },
+                'delay': (2, 4)
+            },
+            {
+                'name': 'desktop_minimal',
+                'description': 'Minimal desktop browser',
+                'user_agent': random.choice(RESIDENTIAL_USER_AGENTS),
+                'quality': 'best[height<=480][ext=mp4]/best[height<=360][ext=mp4]',
+                'headers': {
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache',
+                },
+                'extractor_args': {
+                    'youtube': {
+                        'skip': ['dash'],
+                        'player_client': ['web'],
+                    }
+                },
+                'delay': (3, 6)
+            },
+            {
+                'name': 'embedded_bypass',
+                'description': 'Embedded player simulation',
+                'user_agent': random.choice(RESIDENTIAL_USER_AGENTS),
+                'quality': 'best[height<=720][ext=mp4]',
+                'headers': {
+                    'Accept': '*/*',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Referer': 'https://www.youtube.com/',
+                    'Origin': 'https://www.youtube.com',
+                    'X-YouTube-Client-Name': '1',
+                    'X-YouTube-Client-Version': '2.20231201.01.00',
+                },
+                'extractor_args': {
+                    'youtube': {
+                        'skip': ['hls'],
+                        'player_client': ['web', 'android'],
+                        'player_skip': ['configs'],
+                        'innertube_host': 'www.youtube.com',
+                    }
+                },
+                'delay': (4, 8)
+            },
+            {
+                'name': 'tv_client',
+                'description': 'YouTube TV client simulation',
+                'user_agent': 'Mozilla/5.0 (Linux; U; Android 10; SM-G973F Build/QP1A.190711.020) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/112.0.0.0 Mobile Safari/537.36 SmartTubeNext',
+                'quality': 'best[height<=1080][ext=mp4]',
+                'headers': {
+                    'Accept': 'application/json, text/plain, */*',
+                    'Accept-Language': 'en-US',
+                    'Content-Type': 'application/json',
+                    'X-YouTube-Client-Name': '2',
+                    'X-YouTube-Client-Version': '2.20231201',
+                },
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['tv'],
+                        'skip': ['dash', 'hls'],
+                        'innertube_host': 'www.youtube.com',
+                        'innertube_key': None,
+                    }
+                },
+                'delay': (5, 10)
+            },
+            {
+                'name': 'music_client',
+                'description': 'YouTube Music client',
+                'user_agent': random.choice(RESIDENTIAL_USER_AGENTS),
+                'quality': 'best[ext=mp4]/best',
+                'headers': {
+                    'Accept': 'application/json',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Referer': 'https://music.youtube.com/',
+                    'Origin': 'https://music.youtube.com',
+                },
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android_music'],
+                        'skip': ['dash'],
+                    }
+                },
+                'delay': (6, 12)
+            }
+        ]
+
+    def get_alternative_youtube_urls(self, original_url):
+        """YouTube URL'si için alternatif URL'ler"""
+        video_id_pattern = r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/)([^&\n?#]+)'
+        match = re.search(video_id_pattern, original_url)
+        
+        if not match:
+            return [original_url]
+        
+        video_id = match.group(1)
+        
+        alternatives = [
+            original_url,
+            f"https://www.youtube.com/watch?v={video_id}",
+            f"https://youtu.be/{video_id}",
+            f"https://m.youtube.com/watch?v={video_id}",
+            f"https://music.youtube.com/watch?v={video_id}",
+            f"https://www.youtube.com/embed/{video_id}",
+        ]
+        
+        return alternatives
+
+    def create_stealth_opts(self, strategy):
+        """Stealth yt-dlp options oluştur"""
         opts = {
-            'format': quality,
-            'quiet': False,  # Sessiz modu kapat
-            'no_warnings': False,  # Uyarıları göster
-            'verbose': True,  # Detaylı log
-            'logger': self.DebugLogger(self.logger),
+            'format': strategy['quality'],
+            'quiet': True,  # Minimize logging
+            'no_warnings': True,
+            'extract_flat': False,
+            'logger': self.StealthLogger(self.logger),
             'max_filesize': MAX_CONTENT_LENGTH,
             'ignoreerrors': False,
             'no_check_certificate': True,
-            'extract_flat': False,
             
-            # Bot bypass için gelişmiş HTTP ayarları
+            # Enhanced HTTP simulation
             'http_headers': {
-                'User-Agent': random.choice(USER_AGENTS),
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Cache-Control': 'max-age=0',
+                'User-Agent': strategy['user_agent'],
+                **strategy['headers']
             },
             
-            # Retry ayarları - artırıldı
-            'extractor_retries': 5,
-            'fragment_retries': 5,
-            'socket_timeout': 60,
+            # Aggressive retry settings
+            'extractor_retries': 10,
+            'fragment_retries': 10,
+            'socket_timeout': 120,
             
-            # Bot bypass için gecikme
-            'sleep_interval': 1,
-            'max_sleep_interval': 3,
+            # Rate limiting to avoid detection
+            'sleep_interval': strategy['delay'][0],
+            'max_sleep_interval': strategy['delay'][1],
+            'sleep_interval_requests': 2,
+            
+            # Output template
+            'outtmpl': {
+                'default': '%(title)s.%(ext)s'
+            },
+            
+            # Strategy-specific extractor args
+            'extractor_args': strategy['extractor_args'],
+            
+            # Additional stealth settings
+            'prefer_insecure': False,
+            'no_call_home': True,
         }
         
-        # Platform özel ayarlar - YouTube için gelişmiş bypass
-        if platform == 'youtube':
-            opts.update({
-                'extractor_args': {
-                    'youtube': {
-                        'skip': ['dash', 'hls'],  # Daha agresif skip
-                        'player_client': ['web', 'android'],  # Multiple clients
-                        'player_skip': ['configs', 'webpage'],
-                        'innertube_host': 'studio.youtube.com',
-                    }
-                },
-                # YouTube için özel format seçimi
-                'format_sort': ['res:720', 'ext:mp4:m4a'],
-                'format_sort_force': True,
-            })
-        
-        self.logger.debug(f"Debug opts created for {platform} with quality: {quality}")
-        self.logger.debug(f"Headers: {opts.get('http_headers', {}).get('User-Agent', 'None')}")
         return opts
 
-    def test_basic_extraction(self, url):
-        """Temel bilgi çıkarma testi - YouTube için bypass eklendi"""
+    def download_video(self, url, quality='best[height<=720]/best'):
+        """Ana indirme fonksiyonu"""
+        temp_dir = tempfile.mkdtemp()
+        self.logger.info(f"Starting ultimate bypass download. URL: {url}")
+        
         try:
-            self.logger.info(f"Testing basic extraction for: {url}")
-            
             platform = self.detect_platform(url)
             
-            # YouTube için özel test ayarları
             if platform == 'youtube':
-                opts = {
-                    'quiet': True,  # YouTube için sessiz mod
-                    'no_warnings': True,
-                    'extract_flat': False,
-                    'skip_download': True,
-                    'logger': self.DebugLogger(self.logger),
-                    'outtmpl': {
-                        'default': '%(title)s.%(ext)s'
-                    },
-                    # Minimal bot bypass
-                    'http_headers': {
-                        'User-Agent': random.choice(USER_AGENTS),
-                        'Accept-Language': 'en-US,en;q=0.9',
-                    },
-                    'extractor_args': {
-                        'youtube': {
-                            'skip': ['dash'],
-                            'player_client': ['web'],
-                        }
-                    },
-                    'socket_timeout': 30,
-                }
+                return self._handle_youtube_ultimate_bypass(url, quality, temp_dir)
             else:
-                # Diğer platformlar için normal ayarlar
-                opts = {
-                    'quiet': False,
-                    'no_warnings': False,
-                    'extract_flat': False,
-                    'skip_download': True,
-                    'logger': self.DebugLogger(self.logger),
-                    'outtmpl': {
-                        'default': '%(title)s.%(ext)s'
-                    }
+                return self._handle_other_platform(url, quality, platform, temp_dir)
+                
+        except Exception as e:
+            self.logger.error(f"Download failed: {e}")
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            raise e
+
+    def _handle_youtube_ultimate_bypass(self, url, quality, temp_dir):
+        """YouTube için ultimate bypass"""
+        self.logger.info("Starting YouTube ultimate bypass with multiple strategies")
+        
+        strategies = self.get_youtube_strategies()
+        alternative_urls = self.get_alternative_youtube_urls(url)
+        
+        # Her strateji için her URL'yi dene
+        for strategy in strategies:
+            strategy_id = strategy['name']
+            
+            # Daha önce başarısız olan stratejileri atla
+            if strategy_id in self.failed_strategies:
+                self.logger.info(f"Skipping previously failed strategy: {strategy_id}")
+                continue
+            
+            self.logger.info(f"Trying strategy: {strategy['description']}")
+            
+            for alt_url in alternative_urls:
+                try:
+                    self.logger.info(f"Testing URL: {alt_url} with strategy: {strategy_id}")
+                    
+                    # Strategy delay
+                    delay = random.uniform(*strategy['delay'])
+                    self.logger.info(f"Applying delay: {delay:.2f} seconds")
+                    time.sleep(delay)
+                    
+                    opts = self.create_stealth_opts(strategy)
+                    opts['outtmpl']['default'] = os.path.join(temp_dir, '%(title)s.%(ext)s')
+                    
+                    with yt_dlp.YoutubeDL(opts) as ydl:
+                        # Info extraction test
+                        self.logger.info("Testing info extraction...")
+                        info = ydl.extract_info(alt_url, download=False)
+                        
+                        if not info:
+                            self.logger.warning(f"No info extracted for {alt_url}")
+                            continue
+                        
+                        title = self.clean_title(info.get('title', 'video'))
+                        duration = info.get('duration', 0)
+                        
+                        self.logger.info(f"Info extraction successful: {title} ({duration}s)")
+                        
+                        # Update output template with title
+                        opts['outtmpl']['default'] = os.path.join(temp_dir, f'{title}.%(ext)s')
+                        
+                        # Actual download
+                        self.logger.info("Starting download...")
+                        ydl.download([alt_url])
+                        
+                        # Check for downloaded files
+                        files = os.listdir(temp_dir)
+                        if files:
+                            file_path = os.path.join(temp_dir, files[0])
+                            file_size = os.path.getsize(file_path)
+                            
+                            if file_size > 1024:  # At least 1KB
+                                self.logger.info(f"SUCCESS! Strategy {strategy_id} worked. File: {file_size} bytes")
+                                return file_path, title
+                            else:
+                                self.logger.warning(f"File too small: {file_size} bytes")
+                                continue
+                        else:
+                            self.logger.warning("No files found after download")
+                            continue
+                            
+                except yt_dlp.DownloadError as e:
+                    error_msg = str(e).lower()
+                    if any(keyword in error_msg for keyword in ['sign in', 'bot', 'captcha', 'verify']):
+                        self.logger.warning(f"Bot detection for {alt_url} with {strategy_id}")
+                        continue
+                    else:
+                        self.logger.warning(f"Download error for {alt_url}: {e}")
+                        continue
+                except Exception as e:
+                    self.logger.warning(f"Unexpected error for {alt_url} with {strategy_id}: {e}")
+                    continue
+            
+            # Mark strategy as failed if all URLs failed
+            self.failed_strategies.add(strategy_id)
+            self.logger.warning(f"Strategy {strategy_id} failed for all URLs")
+        
+        # All strategies failed
+        raise Exception("All YouTube bypass strategies exhausted. Video is heavily protected or unavailable.")
+
+    def _handle_other_platform(self, url, quality, platform, temp_dir):
+        """Diğer platformlar için normal işlem"""
+        try:
+            opts = {
+                'format': quality,
+                'quiet': False,
+                'no_warnings': False,
+                'logger': self.StealthLogger(self.logger),
+                'max_filesize': MAX_CONTENT_LENGTH,
+                'http_headers': {
+                    'User-Agent': random.choice(RESIDENTIAL_USER_AGENTS),
+                },
+                'outtmpl': {
+                    'default': os.path.join(temp_dir, '%(title)s.%(ext)s')
                 }
+            }
             
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 
-                if info:
-                    self.logger.info(f"Basic extraction successful. Title: {info.get('title', 'Unknown')}")
-                    return {
-                        'success': True,
-                        'title': info.get('title'),
-                        'duration': info.get('duration'),
-                        'formats_count': len(info.get('formats', [])),
-                        'uploader': info.get('uploader'),
-                    }
-                else:
-                    self.logger.error("Basic extraction returned None")
-                    return {'success': False, 'error': 'No info extracted'}
+                if info and info.get('title'):
+                    title = self.clean_title(info.get('title'))
+                    opts['outtmpl']['default'] = os.path.join(temp_dir, f'{title}.%(ext)s')
                     
-        except Exception as e:
-            self.logger.error(f"Basic extraction failed: {str(e)}")
-            self.logger.error(f"Traceback: {traceback.format_exc()}")
-            return {'success': False, 'error': str(e), 'traceback': traceback.format_exc()}
-
-    def download_video(self, url, quality='best[height<=720]/best'):
-        """Ana indirme fonksiyonu - YouTube bot bypass logic eklendi"""
-        temp_dir = tempfile.mkdtemp()
-        self.logger.info(f"Starting download process. URL: {url}, Quality: {quality}")
-        self.logger.info(f"Temp directory: {temp_dir}")
-        
-        try:
-            # 1. Platform algıla
-            platform = self.detect_platform(url)
-            
-            # 2. YouTube için özel işlem
-            if platform == 'youtube':
-                return self._handle_youtube_download(url, quality, temp_dir)
-            else:
-                # 3. Diğer platformlar için normal işlem
-                return self._handle_other_platform_download(url, quality, platform, temp_dir)
-            
-        except Exception as e:
-            self.logger.error(f"Download process failed: {str(e)}")
-            self.logger.error(f"Full traceback: {traceback.format_exc()}")
-            shutil.rmtree(temp_dir, ignore_errors=True)
-            raise e
-
-    def _handle_youtube_download(self, url, quality, temp_dir):
-        """YouTube için özel bot bypass download logic"""
-        self.logger.info("YouTube detected - using enhanced bot bypass")
-        
-        # YouTube için alternatif stratejiler
-        strategies = [
-            {
-                'name': 'Minimal Stealth',
-                'quality': 'worst[ext=mp4]/worst',
-                'delay': 2
-            },
-            {
-                'name': 'Standard Quality',
-                'quality': 'best[height<=480][ext=mp4]/best[ext=mp4]',
-                'delay': 3
-            },
-            {
-                'name': 'Original Quality', 
-                'quality': quality,
-                'delay': 4
-            }
-        ]
-        
-        for strategy in strategies:
-            try:
-                self.logger.info(f"Trying YouTube strategy: {strategy['name']}")
-                
-                # Bot algılamasını geciktirmek için bekleme
-                time.sleep(random.uniform(1, strategy['delay']))
-                
-                opts = self.create_debug_opts('youtube', strategy['quality'])
-                opts['outtmpl'] = {
-                    'default': os.path.join(temp_dir, '%(title)s.%(ext)s')
-                }
-                
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    # Info extraction
-                    self.logger.info("Extracting YouTube video info...")
-                    info = ydl.extract_info(url, download=False)
-                    
-                    if not info:
-                        raise Exception("Could not extract YouTube video info")
-                    
-                    title = self.clean_title(info.get('title', 'video'))
-                    self.logger.info(f"YouTube video info extracted: {title}")
-                    
-                    # Download
-                    opts['outtmpl'] = {
-                        'default': os.path.join(temp_dir, f'{title}.%(ext)s')
-                    }
-                    
-                    self.logger.info("Starting YouTube download...")
                     ydl.download([url])
                     
-                    # Dosya kontrolü
                     files = os.listdir(temp_dir)
                     if files:
                         file_path = os.path.join(temp_dir, files[0])
-                        file_size = os.path.getsize(file_path)
-                        self.logger.info(f"YouTube download successful! Size: {file_size} bytes")
                         return file_path, title
-                    
-            except yt_dlp.DownloadError as e:
-                error_msg = str(e).lower()
-                if 'sign in' in error_msg or 'bot' in error_msg:
-                    self.logger.warning(f"YouTube bot detection for strategy '{strategy['name']}', trying next...")
-                    continue
-                else:
-                    self.logger.warning(f"YouTube strategy '{strategy['name']}' failed: {e}")
-                    continue
-            except Exception as e:
-                self.logger.warning(f"YouTube strategy '{strategy['name']}' error: {e}")
-                continue
-        
-        # Tüm YouTube stratejileri başarısız
-        raise Exception("YouTube video protected by bot detection - please try a different video or platform")
-
-    def _handle_other_platform_download(self, url, quality, platform, temp_dir):
-        """Diğer platformlar için normal download - mevcut working logic"""
-        # Temel çıkarma testi (mevcut kod)
-        extraction_test = self.test_basic_extraction(url)
-        if not extraction_test['success']:
-            raise Exception(f"Basic extraction failed: {extraction_test['error']}")
-        
-        self.logger.info(f"Basic extraction test passed: {extraction_test}")
-        
-        # Download dene (mevcut kod)
-        return self._attempt_download_with_debug(url, quality, platform, temp_dir)
-
-    def _attempt_download_with_debug(self, url, quality, platform, temp_dir):
-        """Debug bilgileri ile indirme denemesi - mevcut working code"""
-        
-        # Çeşitli kalite seçenekleri dene
-        quality_options = [
-            quality,  # Kullanıcının seçtiği
-            'best[height<=720]/best',
-            'best[height<=480]/best', 
-            'best[ext=mp4]/best',
-            'worst[ext=mp4]/worst',
-            'best',
-            'worst'
-        ]
-        
-        for i, current_quality in enumerate(quality_options):
-            try:
-                self.logger.info(f"Attempting download with quality option {i+1}: {current_quality}")
-                
-                opts = self.create_debug_opts(platform, current_quality)
-                opts['outtmpl'] = {
-                    'default': os.path.join(temp_dir, '%(title)s.%(ext)s')
-                }
-                
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    # İlk olarak info al
-                    self.logger.info("Extracting video info...")
-                    info = ydl.extract_info(url, download=False)
-                    
-                    if not info:
-                        raise Exception("Could not extract video info")
-                    
-                    title = self.clean_title(info.get('title', 'video'))
-                    self.logger.info(f"Video info extracted successfully. Title: {title}")
-                    
-                    # Format bilgilerini logla
-                    formats = info.get('formats', [])
-                    self.logger.info(f"Available formats: {len(formats)}")
-                    for fmt in formats[:5]:  # İlk 5 formatı logla
-                        self.logger.debug(f"Format: {fmt.get('format_id')} - {fmt.get('ext')} - {fmt.get('resolution', 'unknown')}")
-                    
-                    # Output template'i güncelle
-                    opts['outtmpl'] = {
-                        'default': os.path.join(temp_dir, f'{title}.%(ext)s')
-                    }
-                    
-                    # Download yap
-                    self.logger.info("Starting actual download...")
-                    ydl.download([url])
-                    
-                    # Dosya kontrolü
-                    files = os.listdir(temp_dir)
-                    self.logger.info(f"Files in temp dir after download: {files}")
-                    
-                    if not files:
-                        raise Exception("Download completed but no files found")
-                    
-                    file_path = os.path.join(temp_dir, files[0])
-                    file_size = os.path.getsize(file_path)
-                    
-                    self.logger.info(f"Download successful! File: {files[0]}, Size: {file_size} bytes")
-                    return file_path, title
-                    
-            except yt_dlp.DownloadError as e:
-                error_msg = str(e).lower()
-                self.logger.warning(f"Quality option {i+1} failed: {e}")
-                
-                # Spesifik hata analizi
-                if 'sign in' in error_msg or 'bot' in error_msg:
-                    self.logger.error("Bot detection encountered")
-                    if i < len(quality_options) - 1:
-                        self.logger.info("Trying next quality option...")
-                        time.sleep(random.uniform(2, 5))  # Bot algılamasını geciktir
-                        continue
-                elif 'format' in error_msg:
-                    self.logger.warning("Format error, trying next option")
-                    continue
-                elif 'private' in error_msg:
-                    raise Exception("Video is private or unavailable")
-                else:
-                    self.logger.error(f"Unhandled yt-dlp error: {e}")
-                    if i < len(quality_options) - 1:
-                        continue
                         
-            except Exception as e:
-                self.logger.error(f"Unexpected error in attempt {i+1}: {e}")
-                self.logger.error(f"Traceback: {traceback.format_exc()}")
-                if i < len(quality_options) - 1:
-                    continue
-                else:
-                    raise e
-        
-        # Tüm seçenekler başarısız
-        raise Exception("All quality options failed. Video might be protected or unavailable.")
+            raise Exception("Download completed but no files found")
+            
+        except Exception as e:
+            raise Exception(f"Platform download failed: {e}")
 
-    class DebugLogger:
-        """Gelişmiş debug logger"""
+    class StealthLogger:
+        """Minimal stealth logger"""
         def __init__(self, logger):
             self.logger = logger
             
         def debug(self, msg):
-            # yt-dlp debug mesajlarını filtrele
-            if any(skip in str(msg) for skip in ['[debug]', 'Deleting original file']):
-                pass
-            else:
-                self.logger.debug(f"yt-dlp: {msg}")
+            # Suppress most debug messages
+            pass
                 
         def info(self, msg):
-            self.logger.info(f"yt-dlp: {msg}")
+            if 'ERROR' in str(msg) or 'WARNING' in str(msg):
+                self.logger.warning(f"yt-dlp: {msg}")
                 
         def warning(self, msg):
             self.logger.warning(f"yt-dlp: {msg}")
@@ -425,30 +420,23 @@ class EnhancedVideoDownloader:
         def error(self, msg):
             self.logger.error(f"yt-dlp: {msg}")
 
-# API Endpoints - Mevcut working endpoints
+# API Endpoints
 @app.route('/')
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '2.4-enhanced',
+        'version': '3.0-ultimate',
         'status': 'running',
         'environment': 'Railway' if IS_RAILWAY else 'Local',
-        'debug_mode': True,
-        'yt_dlp_version': yt_dlp.version.__version__,
-        'python_version': sys.version,
+        'youtube_bypass': 'ultimate',
+        'strategies': ['mobile_stealth', 'desktop_minimal', 'embedded_bypass', 'tv_client', 'music_client'],
         'features': [
-            'Enhanced debugging',
-            'YouTube bot bypass',
-            'Multiple quality fallback',
-            'Detailed error reporting',
-            'Platform-specific optimization'
+            'Ultimate YouTube bot bypass',
+            'Multiple strategy fallback',
+            'Alternative URL testing',
+            'Enhanced stealth headers',
+            'Smart delay system'
         ],
-        'endpoints': {
-            '/': 'API Documentation',
-            '/health': 'System Health Check',
-            '/download': 'POST - Video Download',
-            '/test': 'POST - Test video info extraction'
-        },
         'timestamp': datetime.utcnow().isoformat() + 'Z'
     })
 
@@ -456,52 +444,20 @@ def home():
 def health():
     return jsonify({
         'status': 'healthy',
-        'environment': 'Railway' if IS_RAILWAY else 'Local',
+        'youtube_strategies': len(YouTubeUltimateBypass().get_youtube_strategies()),
         'yt_dlp_version': yt_dlp.version.__version__,
-        'debug_mode': True,
-        'youtube_bypass': True,
         'timestamp': datetime.utcnow().isoformat() + 'Z'
     })
-
-@app.route('/test', methods=['POST'])
-def test_video():
-    """Video bilgi çıkarma testi"""
-    try:
-        data = request.get_json()
-        if not data or 'url' not in data:
-            return jsonify({'error': 'URL gerekli'}), 400
-        
-        url = data['url'].strip()
-        logger.info(f"Test request for URL: {url}")
-        
-        downloader = EnhancedVideoDownloader()
-        result = downloader.test_basic_extraction(url)
-        
-        return jsonify({
-            'test_result': result,
-            'url': url,
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
-        })
-        
-    except Exception as e:
-        logger.error(f"Test failed: {e}")
-        return jsonify({
-            'error': str(e),
-            'traceback': traceback.format_exc(),
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
-        }), 500
 
 @app.route('/download', methods=['POST'])
 def download_video():
     start_time = time.time()
     request_id = f"req_{int(time.time())}"
     
-    logger.info(f"[{request_id}] Download request started")
+    logger.info(f"[{request_id}] Ultimate bypass download request")
     
     try:
-        # Request validation
         data = request.get_json()
-        logger.debug(f"[{request_id}] Request data: {data}")
         
         if not data or 'url' not in data:
             return jsonify({
@@ -515,9 +471,7 @@ def download_video():
         quality = data.get('quality', 'best[height<=720]/best')
         
         logger.info(f"[{request_id}] Processing URL: {url}")
-        logger.info(f"[{request_id}] Quality: {quality}")
         
-        # URL validation
         if not url.startswith(('http://', 'https://')):
             return jsonify({
                 'error': 'Invalid URL format', 
@@ -526,15 +480,15 @@ def download_video():
                 'request_id': request_id
             }), 400
         
-        # Download işlemi
-        downloader = EnhancedVideoDownloader()
+        # Ultimate bypass downloader
+        downloader = YouTubeUltimateBypass()
         file_path, title = downloader.download_video(url, quality)
         
         file_size = os.path.getsize(file_path)
         temp_dir = os.path.dirname(file_path)
         processing_time = round(time.time() - start_time, 2)
         
-        logger.info(f"[{request_id}] Download successful - Title: {title}, Size: {file_size} bytes, Time: {processing_time}s")
+        logger.info(f"[{request_id}] Ultimate bypass SUCCESS! Title: {title}, Size: {file_size}, Time: {processing_time}s")
         
         def generate():
             try:
@@ -554,7 +508,8 @@ def download_video():
                 'Cache-Control': 'no-store, no-cache, must-revalidate',
                 'X-Video-Title': title,
                 'X-Processing-Time': str(processing_time),
-                'X-Request-ID': request_id
+                'X-Request-ID': request_id,
+                'X-Bypass-Method': 'ultimate'
             }
         )
         
@@ -563,36 +518,26 @@ def download_video():
         error_details = {
             'error_type': type(e).__name__,
             'error_message': str(e),
-            'traceback': traceback.format_exc(),
             'processing_time': processing_time,
-            'request_id': request_id,
-            'url': data.get('url', 'unknown') if 'data' in locals() else 'unknown'
+            'request_id': request_id
         }
         
-        logger.error(f"[{request_id}] Download failed: {error_details}")
+        logger.error(f"[{request_id}] Ultimate bypass failed: {error_details}")
         
-        # Gelişmiş kullanıcı dostu hata mesajları
+        # Enhanced error messages
         error_msg = str(e).lower()
-        if 'bot' in error_msg or 'sign in' in error_msg:
-            user_message = 'YouTube video bot koruması nedeniyle indirilemedi'
-            error_code = 'YOUTUBE_BOT_PROTECTION'
-            suggestion = 'Instagram, TikTok veya Facebook videolarını deneyin'
-        elif 'protected' in error_msg:
-            user_message = 'Video korunuyor ve indirilemez'
-            error_code = 'VIDEO_PROTECTED'
-            suggestion = 'Farklı bir video deneyin'
-        elif 'format' in error_msg:
-            user_message = 'Video formatı desteklenmiyor'
-            error_code = 'FORMAT_ERROR'
-            suggestion = 'Farklı kalite seçeneği deneyin'
-        elif 'private' in error_msg or 'unavailable' in error_msg:
-            user_message = 'Video mevcut değil veya özel'
-            error_code = 'VIDEO_UNAVAILABLE'
-            suggestion = 'Video URL\'sini kontrol edin'
+        if 'exhausted' in error_msg or 'protected' in error_msg:
+            user_message = 'YouTube videosu çok güçlü koruma altında'
+            error_code = 'YOUTUBE_ULTRA_PROTECTED'
+            suggestion = 'Bu video şu anda indirilemez. Instagram, TikTok veya Facebook videolarını deneyin.'
+        elif 'bot' in error_msg or 'sign in' in error_msg:
+            user_message = 'YouTube bot algılaması aktif'
+            error_code = 'YOUTUBE_BOT_ACTIVE'
+            suggestion = 'Lütfen 10-15 dakika bekleyip tekrar deneyin'
         else:
-            user_message = 'Video indirilemedi'
-            error_code = 'DOWNLOAD_ERROR'
-            suggestion = 'Farklı bir platform veya video deneyin'
+            user_message = 'Video indirme başarısız'
+            error_code = 'DOWNLOAD_FAILED'
+            suggestion = 'Farklı bir platform videosunu deneyin'
         
         return jsonify({
             'error': user_message,
@@ -604,11 +549,9 @@ def download_video():
         }), 500
 
 if __name__ == '__main__':
-    logger.info(f"Starting ReelDrop API v2.4-enhanced on port {PORT}")
-    logger.info(f"Environment: {'Railway' if IS_RAILWAY else 'Local'}")
-    logger.info(f"yt-dlp version: {yt_dlp.version.__version__}")
-    logger.info(f"Python version: {sys.version}")
-    logger.info("YouTube bot bypass strategies enabled")
+    logger.info(f"Starting ReelDrop API v3.0-ultimate on port {PORT}")
+    logger.info("YouTube Ultimate Bypass System initialized")
+    logger.info(f"Available strategies: {len(YouTubeUltimateBypass().get_youtube_strategies())}")
     
     app.run(
         host='0.0.0.0',
