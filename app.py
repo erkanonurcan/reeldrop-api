@@ -15,9 +15,21 @@ from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 import yt_dlp
 
-# Logging
-logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(sys.stdout)])
+# Logging - hem console hem file
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('app.log', encoding='utf-8')
+    ]
+)
 logger = logging.getLogger(__name__)
+
+# Startup log
+print("=" * 50)
+print("ReelDrop API Starting...")
+print("=" * 50)
 
 app = Flask(__name__)
 CORS(app)
@@ -127,14 +139,20 @@ class SimpleDownloader:
     def _youtube_download(self, url, quality, temp_dir):
         strategies = [
             {
-                'name': 'TV Client',
-                'quality': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
+                'name': 'TV Client - Single Stream',
+                'quality': 'best[ext=mp4][vcodec!=none][acodec!=none]/best[ext=mp4]/best',
                 'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1',
                 'args': {'youtube': {'player_client': ['tv_html5', 'tv'], 'skip': ['dash']}}
             },
             {
-                'name': 'Embed Bypass',
-                'quality': 'best[height<=480][ext=mp4]/worst[ext=mp4]/best',
+                'name': 'Mobile - Merged Format',
+                'quality': 'best[height<=720][ext=mp4][vcodec!=none][acodec!=none]/worst[ext=mp4]',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+                'args': {'youtube': {'player_client': ['ios', 'mweb'], 'skip': ['dash', 'hls']}}
+            },
+            {
+                'name': 'Embed Bypass - Low Quality',
+                'quality': 'worst[ext=mp4][vcodec!=none][acodec!=none]/worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
                 'args': {'youtube': {'player_client': ['embed', 'android_embedded'], 'skip': ['dash', 'hls']}}
             },
@@ -145,13 +163,7 @@ class SimpleDownloader:
                 'args': {'youtube': {'player_client': ['android_testsuite'], 'skip': ['dash', 'hls']}}
             },
             {
-                'name': 'iOS Fallback',
-                'quality': 'best[height<=720]/best',
-                'agent': USER_AGENTS[0],
-                'args': {'youtube': {'player_client': ['ios', 'mweb'], 'skip': ['dash']}}
-            },
-            {
-                'name': 'Generic',
+                'name': 'Generic Fallback',
                 'quality': 'best/worst',
                 'agent': USER_AGENTS[2],
                 'args': {}
@@ -180,7 +192,14 @@ class SimpleDownloader:
                     'max_filesize': MAX_CONTENT_LENGTH,
                     'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
                     'age_limit': 18,
-                    'no_check_certificate': True
+                    'no_check_certificate': True,
+                    # Video/Audio senkronizasyon için
+                    'merge_output_format': 'mp4',
+                    'prefer_free_formats': False,
+                    'postprocessors': [{
+                        'key': 'FFmpegVideoConvertor',
+                        'preferedformat': 'mp4',
+                    }]
                 }
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
@@ -548,6 +567,9 @@ def download_video():
     start_time = time.time()
     request_id = f"req_{int(time.time())}"
     
+    # Console'a da yazdır
+    print(f"\n[{request_id}] NEW REQUEST RECEIVED")
+    
     try:
         data = request.get_json()
         if not data or 'url' not in data:
@@ -628,12 +650,17 @@ def download_video():
         }), 500
 
 if __name__ == '__main__':
-    logger.info(f"Starting ReelDrop API v3.2-multi-platform on port {PORT}")
+    print(f"Starting ReelDrop API v3.5-debug-fix on port {PORT}")
+    print("Supported platforms: YouTube, Instagram, Facebook, TikTok, Twitter/X")
+    print("Press Ctrl+C to stop")
+    print("=" * 50)
+    
+    logger.info(f"Starting ReelDrop API v3.5-debug-fix on port {PORT}")
     logger.info("Supported platforms: YouTube, Instagram, Facebook, TikTok, Twitter/X")
     
     app.run(
         host='0.0.0.0',
         port=PORT,
-        debug=False,
+        debug=True,  # Debug mode açık
         threaded=True
     )
