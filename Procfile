@@ -1,1 +1,1 @@
-web: gunicorn -w 3 -t 120 -b 0.0.0.0:$PORT app:app
+gunicorn --bind 0.0.0.0:$PORT --workers=1 app:app
