@@ -129,8 +129,14 @@ class QuickDownloader:
         temp_dir = tempfile.mkdtemp()
         
         try:
-            if 'youtube' in url.lower():
+            if 'youtube' in url.lower() or 'youtu.be' in url.lower():
                 return self._youtube_quick(url, quality, temp_dir)
+            elif 'instagram.com' in url.lower():
+                return self._instagram_quick(url, quality, temp_dir)
+            elif 'facebook.com' in url.lower() or 'fb.watch' in url.lower():
+                return self._facebook_quick(url, quality, temp_dir)
+            elif 'tiktok.com' in url.lower():
+                return self._tiktok_quick(url, quality, temp_dir)
             else:
                 return self._other_quick(url, quality, temp_dir)
         except Exception as e:
@@ -247,7 +253,192 @@ class QuickDownloader:
                 self.logger.warning(f"Strategy {strategy['name']} failed: {e}")
                 continue
                 
-        raise Exception("All YouTube strategies failed")
+            def _instagram_quick(self, url, quality, temp_dir):
+        """Instagram video indirme"""
+        strategies = [
+            {
+                'name': 'Instagram Mobile',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+                'quality': 'best[ext=mp4]/best'
+            },
+            {
+                'name': 'Instagram Desktop',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'quality': 'best/worst'
+            }
+        ]
+        
+        for strategy in strategies:
+            try:
+                self.logger.info(f"Instagram strategy: {strategy['name']}")
+                
+                opts = {
+                    'format': strategy['quality'],
+                    'quiet': True,
+                    'no_warnings': True,
+                    'http_headers': {
+                        'User-Agent': strategy['agent'],
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    },
+                    'socket_timeout': 30,
+                    'extractor_retries': 2,
+                    'max_filesize': MAX_CONTENT_LENGTH,
+                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
+                    'no_check_certificate': True
+                }
+                
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if not info:
+                        continue
+                        
+                    orijinal_baslik = info.get('title', 'instagram_video')
+                    temiz_baslik = self._clean_title(orijinal_baslik)
+                    
+                    opts['outtmpl']['default'] = os.path.join(temp_dir, f'{temiz_baslik}.%(ext)s')
+                    ydl.download([url])
+                    
+                    files = os.listdir(temp_dir)
+                    if files:
+                        file_path = os.path.join(temp_dir, files[0])
+                        if os.path.getsize(file_path) > 1024:
+                            return file_path, orijinal_baslik, temiz_baslik
+                            
+            except Exception as e:
+                self.logger.warning(f"Instagram strategy {strategy['name']} failed: {e}")
+                continue
+                
+        raise Exception("All Instagram strategies failed")
+
+    def _facebook_quick(self, url, quality, temp_dir):
+        """Facebook video indirme"""
+        strategies = [
+            {
+                'name': 'Facebook Mobile',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+                'quality': 'best[ext=mp4]/best'
+            },
+            {
+                'name': 'Facebook Desktop',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'quality': 'best/worst'
+            }
+        ]
+        
+        for strategy in strategies:
+            try:
+                self.logger.info(f"Facebook strategy: {strategy['name']}")
+                
+                opts = {
+                    'format': strategy['quality'],
+                    'quiet': True,
+                    'no_warnings': True,
+                    'http_headers': {
+                        'User-Agent': strategy['agent'],
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1',
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'none'
+                    },
+                    'socket_timeout': 30,
+                    'extractor_retries': 2,
+                    'max_filesize': MAX_CONTENT_LENGTH,
+                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
+                    'no_check_certificate': True,
+                    'ignore_errors': True
+                }
+                
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if not info:
+                        continue
+                        
+                    orijinal_baslik = info.get('title', 'facebook_video')
+                    temiz_baslik = self._clean_title(orijinal_baslik)
+                    
+                    opts['outtmpl']['default'] = os.path.join(temp_dir, f'{temiz_baslik}.%(ext)s')
+                    ydl.download([url])
+                    
+                    files = os.listdir(temp_dir)
+                    if files:
+                        file_path = os.path.join(temp_dir, files[0])
+                        if os.path.getsize(file_path) > 1024:
+                            return file_path, orijinal_baslik, temiz_baslik
+                            
+            except Exception as e:
+                self.logger.warning(f"Facebook strategy {strategy['name']} failed: {e}")
+                continue
+                
+        raise Exception("All Facebook strategies failed")
+
+    def _tiktok_quick(self, url, quality, temp_dir):
+        """TikTok video indirme"""
+        strategies = [
+            {
+                'name': 'TikTok Mobile',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+                'quality': 'best[ext=mp4]/best'
+            },
+            {
+                'name': 'TikTok Desktop',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'quality': 'best/worst'
+            }
+        ]
+        
+        for strategy in strategies:
+            try:
+                self.logger.info(f"TikTok strategy: {strategy['name']}")
+                
+                opts = {
+                    'format': strategy['quality'],
+                    'quiet': True,
+                    'no_warnings': True,
+                    'http_headers': {
+                        'User-Agent': strategy['agent'],
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.5',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    },
+                    'socket_timeout': 30,
+                    'extractor_retries': 2,
+                    'max_filesize': MAX_CONTENT_LENGTH,
+                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
+                    'no_check_certificate': True
+                }
+                
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                    if not info:
+                        continue
+                        
+                    orijinal_baslik = info.get('title', 'tiktok_video')
+                    temiz_baslik = self._clean_title(orijinal_baslik)
+                    
+                    opts['outtmpl']['default'] = os.path.join(temp_dir, f'{temiz_baslik}.%(ext)s')
+                    ydl.download([url])
+                    
+                    files = os.listdir(temp_dir)
+                    if files:
+                        file_path = os.path.join(temp_dir, files[0])
+                        if os.path.getsize(file_path) > 1024:
+                            return file_path, orijinal_baslik, temiz_baslik
+                            
+            except Exception as e:
+                self.logger.warning(f"TikTok strategy {strategy['name']} failed: {e}")
+                continue
+                
+        raise Exception("All TikTok strategies failed")
 
     def _other_quick(self, url, quality, temp_dir):
         """Diğer platformlar için hızlı indirme - yüksek kalite"""
@@ -288,11 +479,11 @@ class QuickDownloader:
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '2.8-bot-protection-bypass',
+        'version': '2.9-multi-platform',
         'status': 'running',
         'max_download_time': f'{DOWNLOAD_TIMEOUT}s',
         'max_file_size': f'{MAX_CONTENT_LENGTH // (1024*1024)}MB',
-        'features': ['Fast YouTube bypass', 'Timeout protection', 'Memory optimization', 'Turkish character support']
+        'features': ['Fast YouTube bypass', 'Timeout protection', 'Memory optimization', 'Multi-platform support', 'Instagram/Facebook/TikTok support']
     })
 
 @app.route('/health')
