@@ -6,14 +6,66 @@ import logging
 import tempfile
 import shutil
 import random
+import requests
 import time
 import sys
 import re
 import threading
 import unicodedata
+from itertools import cycle
 from flask import Flask, request, jsonify, Response, stream_with_context
 from flask_cors import CORS
 import yt_dlp
+
+# Proxy rotation sistemi
+PROXY_LIST = [
+    {'http': 'http://proxy1.com:8080', 'https': 'https://proxy1.com:8080'},
+    {'http': 'http://proxy2.com:8080', 'https': 'https://proxy2.com:8080'},
+    {'http': 'http://proxy3.com:8080', 'https': 'https://proxy3.com:8080'},
+]
+
+# Free proxy servisleri
+FREE_PROXY_APIS = [
+    "https://api.proxyscrape.com/v2/?request=get&format=json&protocol=http",
+    "https://www.proxy-list.download/api/v1/get?type=http",
+    "https://api.proxyrotator.com/free-list"
+]
+
+def get_random_proxy():
+    """Rastgele proxy al"""
+    try:
+        # Önce free proxy API'lerden dene
+        for api in FREE_PROXY_APIS:
+            try:
+                response = requests.get(api, timeout=5)
+                if response.status_code == 200:
+                    try:
+                        proxies = response.json()
+                        if proxies and isinstance(proxies, list):
+                            proxy = random.choice(proxies[:10])  # İlk 10'dan seç
+                            if isinstance(proxy, dict) and 'ip' in proxy and 'port' in proxy:
+                                return {
+                                    'http': f"http://{proxy['ip']}:{proxy['port']}",
+                                    'https': f"http://{proxy['ip']}:{proxy['port']}"
+                                }
+                    except (ValueError, KeyError):
+                        continue
+            except:
+                continue
+                
+        # Fallback: sabit proxy listesi
+        return random.choice(PROXY_LIST) if PROXY_LIST else None
+    except:
+        return None
+
+def get_rotating_headers():
+    """IP rotation için header'lar oluştur"""
+    return {
+        'X-Forwarded-For': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}",
+        'X-Real-IP': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}",
+        'X-Originating-IP': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}",
+        'CF-Connecting-IP': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
+    }
 
 # Logging - hem console hem file
 logging.basicConfig(
@@ -28,7 +80,7 @@ logger = logging.getLogger(__name__)
 
 # Startup log
 print("=" * 50)
-print("ReelDrop API Starting...")
+print("ReelDrop API Starting with Proxy System...")
 print("=" * 50)
 
 app = Flask(__name__)
@@ -139,6 +191,30 @@ class SimpleDownloader:
     def _youtube_download(self, url, quality, temp_dir):
         strategies = [
             {
+                'name': 'Proxy Mobile Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+                'args': {
+                    'youtube': {
+                        'player_client': ['ios'],
+                        'skip': ['dash']
+                    }
+                },
+                'use_proxy': True
+            },
+            {
+                'name': 'Proxy Android Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (Linux; Android 11; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
+                'args': {
+                    'youtube': {
+                        'player_client': ['android'],
+                        'skip': ['dash']
+                    }
+                },
+                'use_proxy': True
+            },
+            {
                 'name': 'Android Music Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
@@ -148,7 +224,8 @@ class SimpleDownloader:
                         'skip': ['dash', 'hls'],
                         'player_skip': ['configs']
                     }
-                }
+                },
+                'use_proxy': False
             },
             {
                 'name': 'iOS Music Bypass',
@@ -159,7 +236,8 @@ class SimpleDownloader:
                         'player_client': ['ios_music', 'ios_creator'],
                         'skip': ['dash', 'hls']
                     }
-                }
+                },
+                'use_proxy': False
             },
             {
                 'name': 'TV Embedded Bypass',
@@ -172,7 +250,20 @@ class SimpleDownloader:
                         'innertube_host': 'www.youtube.com',
                         'innertube_key': None
                     }
-                }
+                },
+                'use_proxy': False
+            },
+            {
+                'name': 'Direct TV Client',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36',
+                'args': {
+                    'youtube': {
+                        'player_client': ['tv'],
+                        'skip': ['dash', 'hls']
+                    }
+                },
+                'use_proxy': False
             },
             {
                 'name': 'Age Restricted Bypass',
@@ -184,24 +275,27 @@ class SimpleDownloader:
                         'skip': ['dash', 'hls'],
                         'player_skip': ['webpage', 'configs']
                     }
-                }
+                },
+                'use_proxy': False
             },
             {
-                'name': 'Web Embedded',
-                'quality': 'worst[ext=mp4]/worst',
-                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'name': 'Embed Fallback',
+                'quality': 'worst/best',
+                'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
                 'args': {
                     'youtube': {
                         'player_client': ['web_embedded'],
                         'skip': ['dash']
                     }
-                }
+                },
+                'use_proxy': False
             },
             {
                 'name': 'Last Resort',
                 'quality': 'worst/best',
                 'agent': 'yt-dlp/2024.12.13',
-                'args': {}
+                'args': {},
+                'use_proxy': False
             }
         ]
         
@@ -209,19 +303,24 @@ class SimpleDownloader:
             try:
                 self.logger.info(f"YouTube strategy: {strategy['name']}")
                 
+                # Base headers
+                base_headers = {
+                    'User-Agent': strategy['agent'],
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                    'Accept-Encoding': 'gzip, deflate',
+                    'Connection': 'keep-alive'
+                }
+                
+                # IP rotation headers ekle
+                rotation_headers = get_rotating_headers()
+                base_headers.update(rotation_headers)
+                
                 opts = {
                     'format': strategy['quality'],
                     'quiet': True,
                     'no_warnings': True,
-                    'http_headers': {
-                        'User-Agent': strategy['agent'],
-                        'Accept-Language': 'en-US,en;q=0.9',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Encoding': 'gzip, deflate',
-                        'Connection': 'keep-alive',
-                        'X-Forwarded-For': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}",
-                        'X-Real-IP': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
-                    },
+                    'http_headers': base_headers,
                     'extractor_args': strategy['args'],
                     'socket_timeout': 45,
                     'max_filesize': MAX_CONTENT_LENGTH,
@@ -233,6 +332,15 @@ class SimpleDownloader:
                     'sleep_interval': 0,
                     'max_sleep_interval': 0
                 }
+                
+                # Proxy kullan eğer strategy'de belirtilmişse
+                if strategy.get('use_proxy', False):
+                    proxy = get_random_proxy()
+                    if proxy:
+                        self.logger.info(f"Using proxy: {proxy['http']}")
+                        opts['proxy'] = proxy['http']
+                    else:
+                        self.logger.warning("No proxy available, using direct connection")
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=False)
@@ -634,14 +742,26 @@ class SimpleDownloader:
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '3.9-anti-bot',
+        'version': '4.2-railway-proxy-system',
         'status': 'running',
+        'features': ['Proxy Support', 'IP Rotation', 'Anti-Bot Protection'],
         'supported_platforms': ['YouTube', 'Instagram', 'Facebook', 'TikTok', 'Twitter/X', 'Generic']
     })
 
 @app.route('/health')
 def health():
     return "OK", 200
+
+@app.route('/proxy-status')
+def proxy_status():
+    """Proxy durumunu kontrol et"""
+    proxy = get_random_proxy()
+    return jsonify({
+        'proxy_available': proxy is not None,
+        'proxy_info': proxy if proxy else 'No proxy available',
+        'free_proxy_apis': len(FREE_PROXY_APIS),
+        'static_proxies': len(PROXY_LIST)
+    })
 
 @app.route('/download', methods=['POST'])
 def download_video():
@@ -670,6 +790,8 @@ def download_video():
             logger.info(f"[{request_id}] Twitter.com detected!")
         elif 'tiktok.com' in url.lower():
             logger.info(f"[{request_id}] TikTok.com detected!")
+        elif 'youtube' in url.lower() or 'youtu.be' in url.lower():
+            logger.info(f"[{request_id}] YouTube detected - using proxy system!")
         else:
             logger.info(f"[{request_id}] Platform not detected, will try fallback")
         
@@ -721,16 +843,19 @@ def download_video():
         
         return jsonify({
             'error': 'Video indirilemedi',
-            'processing_time': processing_time
+            'processing_time': processing_time,
+            'details': str(e) if app.debug else None
         }), 500
 
 if __name__ == '__main__':
-    print(f"Starting ReelDrop API v3.5-debug-fix on port {PORT}")
+    print(f"Starting ReelDrop API v4.2-railway-proxy-system on port {PORT}")
+    print("Features: Proxy Support, IP Rotation, Anti-Bot Protection")
     print("Supported platforms: YouTube, Instagram, Facebook, TikTok, Twitter/X")
     print("Press Ctrl+C to stop")
     print("=" * 50)
     
-    logger.info(f"Starting ReelDrop API v3.5-debug-fix on port {PORT}")
+    logger.info(f"Starting ReelDrop API v4.2-railway-proxy-system on port {PORT}")
+    logger.info("Features: Proxy Support, IP Rotation, Anti-Bot Protection")
     logger.info("Supported platforms: YouTube, Instagram, Facebook, TikTok, Twitter/X")
     
     app.run(
