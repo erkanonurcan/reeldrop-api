@@ -191,81 +191,107 @@ class SimpleDownloader:
     def _youtube_download(self, url, quality, temp_dir):
         strategies = [
             {
-                'name': 'Mobile Bypass',
+                'name': 'Mobile App Bypass',
                 'quality': 'worst[ext=mp4]/worst',
-                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
-                'args': {},
-                'use_proxy': False  # Proxy devre dışı
+                'agent': 'com.google.android.youtube/18.11.34 (Linux; U; Android 11; SM-G973F Build/RP1A.200720.012) gzip',
+                'use_proxy': False,
+                'extra_headers': {
+                    'X-YouTube-Client-Name': '3',
+                    'X-YouTube-Client-Version': '18.11.34',
+                    'X-YouTube-Ad-Signals': 'dt=1735574400000&flash=0&frm&u_tz=0&u_his=1&u_java&u_nplug=0&u_nmime=0&gtm=45be34c0&sendb=1',
+                    'X-Goog-Visitor-Id': 'CgtlcXR6cEJyVW1FayiX5-OoBjIKCgJVUxIEGgAgOA%3D%3D'
+                }
             },
             {
-                'name': 'Android Bypass',
+                'name': 'iOS App Bypass',
                 'quality': 'worst[ext=mp4]/worst',
-                'agent': 'Mozilla/5.0 (Linux; Android 11; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
-                'args': {},
-                'use_proxy': False  # Proxy devre dışı
+                'agent': 'com.google.ios.youtube/18.11.2 (iPhone14,3; U; CPU iOS 16_4 like Mac OS X)',
+                'use_proxy': False,
+                'extra_headers': {
+                    'X-YouTube-Client-Name': '5',
+                    'X-YouTube-Client-Version': '18.11.2',
+                    'X-Goog-Api-Key': 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'
+                }
             },
             {
-                'name': 'Android Music Bypass',
-                'quality': 'worst[ext=mp4]/worst',
-                'agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
-                'args': {},
-                'use_proxy': False
-            },
-            {
-                'name': 'iOS Music Bypass',
-                'quality': 'worst[ext=mp4]/worst',
-                'agent': 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
-                'args': {},
-                'use_proxy': False
-            },
-            {
-                'name': 'TV Embedded Bypass',
-                'quality': 'best[height<=480][ext=mp4]/worst[ext=mp4]/worst',
-                'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/4.0 Chrome/76.0.3809.146 TV Safari/537.36',
-                'args': {},
-                'use_proxy': False
-            },
-            {
-                'name': 'Direct TV Client',
+                'name': 'TV App Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36',
-                'args': {},
-                'use_proxy': False
+                'use_proxy': False,
+                'extra_headers': {
+                    'X-YouTube-Client-Name': '7',
+                    'X-YouTube-Client-Version': '1.0'
+                }
             },
             {
-                'name': 'Age Restricted Bypass',
+                'name': 'Music App Bypass',
                 'quality': 'worst[ext=mp4]/worst',
-                'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                'args': {},
-                'use_proxy': False
+                'agent': 'com.google.android.apps.youtube.music/5.16.51 (Linux; U; Android 11)',
+                'use_proxy': False,
+                'extra_headers': {
+                    'X-YouTube-Client-Name': '21',
+                    'X-YouTube-Client-Version': '5.16.51'
+                }
             },
             {
-                'name': 'Embed Fallback',
-                'quality': 'worst/best',
-                'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                'args': {},
-                'use_proxy': False
+                'name': 'Web TV Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (ChromiumStylePlatform) Cobalt/40.114346.603',
+                'use_proxy': False,
+                'extra_headers': {
+                    'X-YouTube-Client-Name': '85',
+                    'X-YouTube-Client-Version': '1.0'
+                }
             },
             {
-                'name': 'Web Bypass',
+                'name': 'Embedded Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'args': {},
-                'use_proxy': False
+                'use_proxy': False,
+                'extra_headers': {
+                    'Referer': 'https://www.youtube.com/',
+                    'Origin': 'https://www.youtube.com',
+                    'X-YouTube-Client-Name': '56',
+                    'X-YouTube-Client-Version': '1.0'
+                }
             },
             {
-                'name': 'Simple Fallback',
-                'quality': 'worst/best',
-                'agent': 'yt-dlp/2024.12.13',
-                'args': {},
-                'use_proxy': False
+                'name': 'API Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'YouTubeAndroidTestSuite/1.9',
+                'use_proxy': False,
+                'extra_headers': {
+                    'X-YouTube-Client-Name': '30',
+                    'X-YouTube-Client-Version': '1.9'
+                }
+            },
+            {
+                'name': 'Bot Detector Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'use_proxy': False,
+                'extra_headers': {
+                    'X-Forwarded-For': '66.249.66.1',  # Google IP
+                    'X-Real-IP': '66.249.66.1'
+                }
+            },
+            {
+                'name': 'Syndication Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'use_proxy': False,
+                'extra_headers': {
+                    'X-YouTube-Client-Name': '62',
+                    'X-YouTube-Client-Version': '1.0',
+                    'Referer': 'https://syndication.twitter.com/'
+                }
             },
             {
                 'name': 'Ultra Simple',
                 'quality': 'worst',
-                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'args': {},
-                'use_proxy': False
+                'agent': 'curl/7.68.0',
+                'use_proxy': False,
+                'extra_headers': {}
             },
             {
                 'name': 'Last Resort',
@@ -286,12 +312,21 @@ class SimpleDownloader:
                     'Accept-Language': 'en-US,en;q=0.9',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'Accept-Encoding': 'gzip, deflate',
-                    'Connection': 'keep-alive'
+                    'Connection': 'keep-alive',
+                    'DNT': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Upgrade-Insecure-Requests': '1'
                 }
                 
                 # IP rotation headers ekle
                 rotation_headers = get_rotating_headers()
                 base_headers.update(rotation_headers)
+                
+                # Strategy'ye özel ekstra headerlar
+                if 'extra_headers' in strategy:
+                    base_headers.update(strategy['extra_headers'])
                 
                 opts = {
                     'format': strategy['quality'],
