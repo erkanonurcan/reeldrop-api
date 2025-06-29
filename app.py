@@ -138,22 +138,28 @@ class QuickDownloader:
             raise e
 
     def _youtube_quick(self, url, quality, temp_dir):
-        """Hızlı YouTube indirme - daha esnek format seçimi"""
+        """Hızlı YouTube indirme - yüksek kalite öncelikli"""
         strategies = [
             {
-                'name': 'Mobile',
-                'quality': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
+                'name': 'High Quality Mobile',
+                'quality': 'best[height<=1080][ext=mp4]/best[height<=720][ext=mp4]/best[ext=mp4]',
                 'agent': USER_AGENTS[0],
-                'args': {'youtube': {'skip': ['dash', 'hls'], 'player_client': ['ios']}}
+                'args': {'youtube': {'skip': ['dash'], 'player_client': ['ios']}}
             },
             {
-                'name': 'Desktop',  
-                'quality': 'best[height<=480][ext=mp4]/best[height<=720]/best',
+                'name': 'High Quality Desktop',  
+                'quality': 'best[height<=1080]/best[height<=720]/best',
                 'agent': USER_AGENTS[2],
                 'args': {'youtube': {'skip': ['dash'], 'player_client': ['web']}}
             },
             {
-                'name': 'Generic',
+                'name': 'Medium Quality',
+                'quality': 'best[height<=720][ext=mp4]/best[height<=480][ext=mp4]/best[ext=mp4]',
+                'agent': USER_AGENTS[1],
+                'args': {'youtube': {'player_client': ['android']}}
+            },
+            {
+                'name': 'Any Quality',
                 'quality': 'best/worst',
                 'agent': USER_AGENTS[1],
                 'args': {}
@@ -209,14 +215,14 @@ class QuickDownloader:
         raise Exception("All YouTube strategies failed")
 
     def _other_quick(self, url, quality, temp_dir):
-        """Diğer platformlar için hızlı indirme"""
+        """Diğer platformlar için hızlı indirme - yüksek kalite"""
         opts = {
-            'format': quality,
+            'format': quality or 'best[height<=1080]/best[height<=720]/best',
             'quiet': True,
             'no_warnings': True,
             'http_headers': {'User-Agent': random.choice(USER_AGENTS)},
-            'socket_timeout': 20,
-            'extractor_retries': 2,
+            'socket_timeout': 30,
+            'extractor_retries': 3,
             'max_filesize': MAX_CONTENT_LENGTH,
             'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')}
         }
@@ -269,7 +275,7 @@ def download_video():
             return jsonify({'error': 'URL required', 'request_id': request_id}), 400
         
         url = data['url'].strip()
-        quality = data.get('quality', 'best[height<=720]/best')
+        quality = data.get('quality', 'best[height<=1080]/best[height<=720]/best')
         
         logger.info(f"[{request_id}] Download started: {url}")
         
