@@ -194,99 +194,70 @@ class SimpleDownloader:
                 'name': 'Proxy Mobile Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
-                'args': {
-                    'youtube': {
-                        'player_client': 'ios'
-                    }
-                },
+                'args': {},
                 'use_proxy': True
             },
             {
                 'name': 'Proxy Android Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (Linux; Android 11; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
-                'args': {
-                    'youtube': {
-                        'player_client': 'android'
-                    }
-                },
+                'args': {},
                 'use_proxy': True
             },
             {
                 'name': 'Android Music Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
-                'args': {
-                    'youtube': {
-                        'player_client': 'android_music'
-                    }
-                },
+                'args': {},
                 'use_proxy': False
             },
             {
                 'name': 'iOS Music Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
-                'args': {
-                    'youtube': {
-                        'player_client': 'ios_music'
-                    }
-                },
+                'args': {},
                 'use_proxy': False
             },
             {
                 'name': 'TV Embedded Bypass',
                 'quality': 'best[height<=480][ext=mp4]/worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/4.0 Chrome/76.0.3809.146 TV Safari/537.36',
-                'args': {
-                    'youtube': {
-                        'player_client': 'tv_embedded'
-                    }
-                },
+                'args': {},
                 'use_proxy': False
             },
             {
                 'name': 'Direct TV Client',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36',
-                'args': {
-                    'youtube': {
-                        'player_client': 'tv'
-                    }
-                },
+                'args': {},
                 'use_proxy': False
             },
             {
                 'name': 'Age Restricted Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                'args': {
-                    'youtube': {
-                        'player_client': 'android_testsuite'
-                    }
-                },
+                'args': {},
                 'use_proxy': False
             },
             {
                 'name': 'Embed Fallback',
                 'quality': 'worst/best',
                 'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                'args': {
-                    'youtube': {
-                        'player_client': 'web_embedded'
-                    }
-                },
+                'args': {},
                 'use_proxy': False
             },
             {
                 'name': 'Web Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'args': {
-                    'youtube': {
-                        'player_client': 'web'
-                    }
-                },
+                'args': {},
+                'use_proxy': False
+            },
+            {
+                'name': 'Simple Fallback',
+                'quality': 'worst/best',
+                'agent': 'yt-dlp/2024.12.13',
+                'args': {},
                 'use_proxy': False
             },
             {
@@ -320,7 +291,6 @@ class SimpleDownloader:
                     'quiet': True,
                     'no_warnings': True,
                     'http_headers': base_headers,
-                    'extractor_args': strategy['args'],
                     'socket_timeout': 45,
                     'max_filesize': MAX_CONTENT_LENGTH,
                     'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
