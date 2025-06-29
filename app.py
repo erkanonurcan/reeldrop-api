@@ -423,31 +423,50 @@ class YouTubeUltimateBypass:
 # API Endpoints
 @app.route('/')
 def home():
-    return jsonify({
-        'service': 'ReelDrop API',
-        'version': '3.0-ultimate',
-        'status': 'running',
-        'environment': 'Railway' if IS_RAILWAY else 'Local',
-        'youtube_bypass': 'ultimate',
-        'strategies': ['mobile_stealth', 'desktop_minimal', 'embedded_bypass', 'tv_client', 'music_client'],
-        'features': [
-            'Ultimate YouTube bot bypass',
-            'Multiple strategy fallback',
-            'Alternative URL testing',
-            'Enhanced stealth headers',
-            'Smart delay system'
-        ],
-        'timestamp': datetime.utcnow().isoformat() + 'Z'
-    })
+    """Ana endpoint - Railway tarafından da kullanılabilir"""
+    try:
+        return jsonify({
+            'service': 'ReelDrop API',
+            'version': '3.0-ultimate',
+            'status': 'running',
+            'environment': 'Railway' if IS_RAILWAY else 'Local',
+            'youtube_bypass': 'ultimate',
+            'strategies': ['mobile_stealth', 'desktop_minimal', 'embedded_bypass', 'tv_client', 'music_client'],
+            'features': [
+                'Ultimate YouTube bot bypass',
+                'Multiple strategy fallback',
+                'Alternative URL testing',
+                'Enhanced stealth headers',
+                'Smart delay system'
+            ],
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        }), 200
+    except Exception as e:
+        logger.error(f"Home endpoint failed: {e}")
+        return jsonify({
+            'service': 'ReelDrop API',
+            'status': 'error',
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        }), 500
 
 @app.route('/health')
 def health():
-    return jsonify({
-        'status': 'healthy',
-        'youtube_strategies': len(YouTubeUltimateBypass().get_youtube_strategies()),
-        'yt_dlp_version': yt_dlp.version.__version__,
-        'timestamp': datetime.utcnow().isoformat() + 'Z'
-    })
+    """Railway healthcheck endpoint"""
+    try:
+        return jsonify({
+            'status': 'healthy',
+            'youtube_strategies': len(YouTubeUltimateBypass().get_youtube_strategies()),
+            'yt_dlp_version': yt_dlp.version.__version__,
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        }), 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
+        }), 500
 
 @app.route('/download', methods=['POST'])
 def download_video():
