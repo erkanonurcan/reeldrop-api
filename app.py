@@ -436,39 +436,78 @@ class SimpleDownloader:
         raise Exception("All TikTok strategies failed")
 
     def _twitter_download(self, url, quality, temp_dir):
-        """Twitter/X video indirme - gelişmiş"""
+        """Twitter/X video indirme - gelişmiş ve güçlendirilmiş"""
         self.logger.info(f"Twitter download started for: {url}")
+        
+        # URL normalizasyonu
+        if 'x.com' in url:
+            # x.com'u twitter.com'a çevir
+            normalized_url = url.replace('x.com', 'twitter.com')
+            self.logger.info(f"Normalized URL: {normalized_url}")
+        else:
+            normalized_url = url
         
         strategies = [
             {
-                'name': 'Twitter API',
+                'name': 'Twitter Syndication API',
                 'quality': 'best[ext=mp4]/best',
                 'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'extra_opts': {'extractor_args': {'twitter': {'api': ['syndication']}}}
+                'extra_opts': {
+                    'extractor_args': {
+                        'twitter': {
+                            'api': ['syndication'],
+                            'legacy_api': True
+                        }
+                    }
+                },
+                'url': normalized_url
             },
             {
-                'name': 'Twitter Mobile',
+                'name': 'Twitter GraphQL',
                 'quality': 'best[ext=mp4]/best',
                 'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
-                'extra_opts': {}
+                'extra_opts': {
+                    'extractor_args': {
+                        'twitter': {
+                            'api': ['graphql'],
+                            'guest_token': True
+                        }
+                    }
+                },
+                'url': normalized_url
             },
             {
-                'name': 'Twitter Guest',
-                'quality': 'best/worst',
+                'name': 'X.com Direct',
+                'quality': 'best[ext=mp4]/best',
                 'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'extra_opts': {'extractor_args': {'twitter': {'api': ['graphql']}}}
+                'extra_opts': {},
+                'url': url  # Orijinal x.com URL'si
             },
             {
-                'name': 'Twitter Legacy',
+                'name': 'Twitter Mobile Web',
+                'quality': 'best/worst',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+                'extra_opts': {},
+                'url': normalized_url
+            },
+            {
+                'name': 'Twitter Legacy Fallback',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'Twitterbot/1.0',
-                'extra_opts': {}
+                'extra_opts': {
+                    'extractor_args': {
+                        'twitter': {
+                            'legacy_api': True
+                        }
+                    }
+                },
+                'url': normalized_url
             }
         ]
         
         for strategy in strategies:
             try:
-                self.logger.info(f"Twitter strategy: {strategy['name']}")
+                self.logger.info(f"Twitter strategy: {strategy['name']} with URL: {strategy['url']}")
                 
                 opts = {
                     'format': strategy['quality'],
@@ -483,10 +522,11 @@ class SimpleDownloader:
                         'Upgrade-Insecure-Requests': '1',
                         'Sec-Fetch-Dest': 'document',
                         'Sec-Fetch-Mode': 'navigate',
-                        'Sec-Fetch-Site': 'none'
+                        'Sec-Fetch-Site': 'none',
+                        'Cache-Control': 'no-cache'
                     },
-                    'socket_timeout': 30,
-                    'extractor_retries': 3,
+                    'socket_timeout': 45,  # Daha uzun timeout
+                    'extractor_retries': 5,  # Daha fazla retry
                     'max_filesize': MAX_CONTENT_LENGTH,
                     'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
                     'no_check_certificate': True,
@@ -497,15 +537,24 @@ class SimpleDownloader:
                 opts.update(strategy['extra_opts'])
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(url, download=False)
+                    # Önce info extraction
+                    info = ydl.extract_info(strategy['url'], download=False)
                     if not info:
                         self.logger.warning(f"No info extracted for {strategy['name']}")
                         continue
+                    
+                    # Video var mı kontrol et
+                    if not info.get('formats') and not info.get('url'):
+                        self.logger.warning(f"No video formats found for {strategy['name']}")
+                        continue
                         
                     title = clean_filename(info.get('title', 'twitter_video'))
+                    self.logger.info(f"Video found: {title}")
+                    
                     opts['outtmpl']['default'] = os.path.join(temp_dir, f'{title}.%(ext)s')
                     
-                    ydl.download([url])
+                    # Download
+                    ydl.download([strategy['url']])
                     
                     files = os.listdir(temp_dir)
                     if files:
