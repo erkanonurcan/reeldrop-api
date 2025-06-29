@@ -196,7 +196,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
                 'args': {
                     'youtube': {
-                        'player_client': ['ios'],
+                        'player_client': 'ios',
                         'skip': ['dash']
                     }
                 },
@@ -208,7 +208,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (Linux; Android 11; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
                 'args': {
                     'youtube': {
-                        'player_client': ['android'],
+                        'player_client': 'android',
                         'skip': ['dash']
                     }
                 },
@@ -220,7 +220,7 @@ class SimpleDownloader:
                 'agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
                 'args': {
                     'youtube': {
-                        'player_client': ['android_music', 'android_creator'],
+                        'player_client': 'android_music',
                         'skip': ['dash', 'hls'],
                         'player_skip': ['configs']
                     }
@@ -233,7 +233,7 @@ class SimpleDownloader:
                 'agent': 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
                 'args': {
                     'youtube': {
-                        'player_client': ['ios_music', 'ios_creator'],
+                        'player_client': 'ios_music',
                         'skip': ['dash', 'hls']
                     }
                 },
@@ -245,7 +245,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/4.0 Chrome/76.0.3809.146 TV Safari/537.36',
                 'args': {
                     'youtube': {
-                        'player_client': ['tv_embedded'],
+                        'player_client': 'tv_embedded',
                         'skip': ['dash', 'hls'],
                         'innertube_host': 'www.youtube.com',
                         'innertube_key': None
@@ -259,7 +259,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36',
                 'args': {
                     'youtube': {
-                        'player_client': ['tv'],
+                        'player_client': 'tv',
                         'skip': ['dash', 'hls']
                     }
                 },
@@ -271,7 +271,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
                 'args': {
                     'youtube': {
-                        'player_client': ['android_testsuite', 'android_embedded'],
+                        'player_client': 'android_testsuite',
                         'skip': ['dash', 'hls'],
                         'player_skip': ['webpage', 'configs']
                     }
@@ -284,7 +284,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
                 'args': {
                     'youtube': {
-                        'player_client': ['web_embedded'],
+                        'player_client': 'web_embedded',
                         'skip': ['dash']
                     }
                 },
