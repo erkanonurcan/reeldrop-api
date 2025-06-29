@@ -138,31 +138,54 @@ class QuickDownloader:
             raise e
 
     def _youtube_quick(self, url, quality, temp_dir):
-        """Hızlı YouTube indirme - yüksek kalite öncelikli"""
+        """Hızlı YouTube indirme - bot koruması bypass"""
         strategies = [
             {
-                'name': 'High Quality Mobile',
-                'quality': 'best[height<=1080][ext=mp4]/best[height<=720][ext=mp4]/best[ext=mp4]',
-                'agent': USER_AGENTS[0],
-                'args': {'youtube': {'skip': ['dash'], 'player_client': ['ios']}}
+                'name': 'Anonymous Mobile',
+                'quality': 'best[height<=720][ext=mp4]/best[ext=mp4]/best',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+                'args': {
+                    'youtube': {
+                        'skip': ['dash', 'hls'],
+                        'player_client': ['ios', 'mweb'],
+                        'player_skip': ['configs'],
+                        'innertube_host': 'studio.youtube.com'
+                    }
+                }
             },
             {
-                'name': 'High Quality Desktop',  
-                'quality': 'best[height<=1080]/best[height<=720]/best',
-                'agent': USER_AGENTS[2],
-                'args': {'youtube': {'skip': ['dash'], 'player_client': ['web']}}
+                'name': 'Embed Bypass',
+                'quality': 'best[height<=480][ext=mp4]/worst[ext=mp4]/best',
+                'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'args': {
+                    'youtube': {
+                        'skip': ['dash'],
+                        'player_client': ['embed', 'android'],
+                        'player_skip': ['webpage']
+                    }
+                }
             },
             {
-                'name': 'Medium Quality',
-                'quality': 'best[height<=720][ext=mp4]/best[height<=480][ext=mp4]/best[ext=mp4]',
-                'agent': USER_AGENTS[1],
-                'args': {'youtube': {'player_client': ['android']}}
+                'name': 'TV Client',
+                'quality': 'best[height<=720]/best',
+                'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1',
+                'args': {
+                    'youtube': {
+                        'player_client': ['tv', 'tvhtml5'],
+                        'skip': ['dash']
+                    }
+                }
             },
             {
-                'name': 'Any Quality',
-                'quality': 'best/worst',
-                'agent': USER_AGENTS[1],
-                'args': {}
+                'name': 'Age Gate Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (Linux; Android 11; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
+                'args': {
+                    'youtube': {
+                        'player_client': ['android_testsuite', 'android_embedded'],
+                        'skip': ['dash', 'hls']
+                    }
+                }
             }
         ]
         
@@ -174,13 +197,25 @@ class QuickDownloader:
                     'format': strategy['quality'],
                     'quiet': True,
                     'no_warnings': True,
-                    'http_headers': {'User-Agent': strategy['agent']},
+                    'http_headers': {
+                        'User-Agent': strategy['agent'],
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'DNT': '1',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1'
+                    },
                     'extractor_args': strategy['args'],
-                    'socket_timeout': 20,
-                    'extractor_retries': 2,
-                    'fragment_retries': 2,
+                    'socket_timeout': 30,
+                    'extractor_retries': 1,
+                    'fragment_retries': 1,
                     'max_filesize': MAX_CONTENT_LENGTH,
-                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')}
+                    'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
+                    'age_limit': 18,
+                    'writesubtitles': False,
+                    'writeautomaticsub': False,
+                    'no_check_certificate': True
                 }
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
@@ -253,7 +288,7 @@ class QuickDownloader:
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '2.7-turkish-fixed',
+        'version': '2.8-bot-protection-bypass',
         'status': 'running',
         'max_download_time': f'{DOWNLOAD_TIMEOUT}s',
         'max_file_size': f'{MAX_CONTENT_LENGTH // (1024*1024)}MB',
