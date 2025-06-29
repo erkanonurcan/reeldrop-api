@@ -139,33 +139,68 @@ class SimpleDownloader:
     def _youtube_download(self, url, quality, temp_dir):
         strategies = [
             {
-                'name': 'TV Client - Single Stream',
-                'quality': 'best[ext=mp4][vcodec!=none][acodec!=none]/best[ext=mp4]/best',
-                'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1',
-                'args': {'youtube': {'player_client': ['tv_html5', 'tv'], 'skip': ['dash']}}
-            },
-            {
-                'name': 'Mobile - Merged Format',
-                'quality': 'best[height<=720][ext=mp4][vcodec!=none][acodec!=none]/worst[ext=mp4]',
-                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
-                'args': {'youtube': {'player_client': ['ios', 'mweb'], 'skip': ['dash', 'hls']}}
-            },
-            {
-                'name': 'Embed Bypass - Low Quality',
-                'quality': 'worst[ext=mp4][vcodec!=none][acodec!=none]/worst[ext=mp4]/worst',
-                'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                'args': {'youtube': {'player_client': ['embed', 'android_embedded'], 'skip': ['dash', 'hls']}}
-            },
-            {
-                'name': 'Age Gate Bypass',
+                'name': 'Android Music Bypass',
                 'quality': 'worst[ext=mp4]/worst',
-                'agent': 'Mozilla/5.0 (Linux; Android 11; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
-                'args': {'youtube': {'player_client': ['android_testsuite'], 'skip': ['dash', 'hls']}}
+                'agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+                'args': {
+                    'youtube': {
+                        'player_client': ['android_music', 'android_creator'],
+                        'skip': ['dash', 'hls'],
+                        'player_skip': ['configs']
+                    }
+                }
             },
             {
-                'name': 'Generic Fallback',
-                'quality': 'best/worst',
-                'agent': USER_AGENTS[2],
+                'name': 'iOS Music Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
+                'args': {
+                    'youtube': {
+                        'player_client': ['ios_music', 'ios_creator'],
+                        'skip': ['dash', 'hls']
+                    }
+                }
+            },
+            {
+                'name': 'TV Embedded Bypass',
+                'quality': 'best[height<=480][ext=mp4]/worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/4.0 Chrome/76.0.3809.146 TV Safari/537.36',
+                'args': {
+                    'youtube': {
+                        'player_client': ['tv_embedded'],
+                        'skip': ['dash', 'hls'],
+                        'innertube_host': 'www.youtube.com',
+                        'innertube_key': None
+                    }
+                }
+            },
+            {
+                'name': 'Age Restricted Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'args': {
+                    'youtube': {
+                        'player_client': ['android_testsuite', 'android_embedded'],
+                        'skip': ['dash', 'hls'],
+                        'player_skip': ['webpage', 'configs']
+                    }
+                }
+            },
+            {
+                'name': 'Web Embedded',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'args': {
+                    'youtube': {
+                        'player_client': ['web_embedded'],
+                        'skip': ['dash']
+                    }
+                }
+            },
+            {
+                'name': 'Last Resort',
+                'quality': 'worst/best',
+                'agent': 'yt-dlp/2024.12.13',
                 'args': {}
             }
         ]
@@ -183,23 +218,20 @@ class SimpleDownloader:
                         'Accept-Language': 'en-US,en;q=0.9',
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                         'Accept-Encoding': 'gzip, deflate',
-                        'DNT': '1',
                         'Connection': 'keep-alive',
-                        'Upgrade-Insecure-Requests': '1'
+                        'X-Forwarded-For': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}",
+                        'X-Real-IP': f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
                     },
                     'extractor_args': strategy['args'],
-                    'socket_timeout': 30,
+                    'socket_timeout': 45,
                     'max_filesize': MAX_CONTENT_LENGTH,
                     'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
-                    'age_limit': 18,
                     'no_check_certificate': True,
-                    # Video/Audio senkronizasyon için
-                    'merge_output_format': 'mp4',
-                    'prefer_free_formats': False,
-                    'postprocessors': [{
-                        'key': 'FFmpegVideoConvertor',
-                        'preferedformat': 'mp4',
-                    }]
+                    'extract_flat': False,
+                    'geo_bypass': True,
+                    'geo_bypass_country': ['US', 'GB', 'CA'],
+                    'sleep_interval': 0,
+                    'max_sleep_interval': 0
                 }
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
@@ -602,7 +634,7 @@ class SimpleDownloader:
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '3.8-clean-fix',
+        'version': '3.9-anti-bot',
         'status': 'running',
         'supported_platforms': ['YouTube', 'Instagram', 'Facebook', 'TikTok', 'Twitter/X', 'Generic']
     })
