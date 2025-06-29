@@ -96,10 +96,16 @@ class SimpleDownloader:
                 return self._facebook_download(url, quality, temp_dir)
             elif 'tiktok.com' in url.lower():
                 return self._tiktok_download(url, quality, temp_dir)
-            elif 'twitter.com' in url.lower() or 'x.com' in url.lower():
+            elif 'twitter.com' in url.lower() or 'x.com' in url.lower() or 't.co' in url.lower():
                 return self._twitter_download(url, quality, temp_dir)
             else:
-                return self._generic_download(url, quality, temp_dir)
+                # Bilinmeyen platform için önce Twitter dene, sonra generic
+                try:
+                    self.logger.info("Unknown platform, trying Twitter first...")
+                    return self._twitter_download(url, quality, temp_dir)
+                except:
+                    self.logger.info("Twitter failed, trying generic download...")
+                    return self._generic_download(url, quality, temp_dir)
         except Exception as e:
             shutil.rmtree(temp_dir, ignore_errors=True)
             raise e
@@ -375,19 +381,33 @@ class SimpleDownloader:
         raise Exception("All TikTok strategies failed")
 
     def _twitter_download(self, url, quality, temp_dir):
-        """Twitter/X video indirme"""
-        self.logger.info("Twitter download started")
+        """Twitter/X video indirme - gelişmiş"""
+        self.logger.info(f"Twitter download started for: {url}")
         
         strategies = [
             {
-                'name': 'Twitter Mobile',
+                'name': 'Twitter API',
                 'quality': 'best[ext=mp4]/best',
-                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1'
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'extra_opts': {'extractor_args': {'twitter': {'api': ['syndication']}}}
             },
             {
-                'name': 'Twitter Desktop',
+                'name': 'Twitter Mobile',
+                'quality': 'best[ext=mp4]/best',
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+                'extra_opts': {}
+            },
+            {
+                'name': 'Twitter Guest',
                 'quality': 'best/worst',
-                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'extra_opts': {'extractor_args': {'twitter': {'api': ['graphql']}}}
+            },
+            {
+                'name': 'Twitter Legacy',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Twitterbot/1.0',
+                'extra_opts': {}
             }
         ]
         
@@ -405,17 +425,26 @@ class SimpleDownloader:
                         'Accept-Language': 'en-US,en;q=0.5',
                         'Accept-Encoding': 'gzip, deflate',
                         'Connection': 'keep-alive',
-                        'Upgrade-Insecure-Requests': '1'
+                        'Upgrade-Insecure-Requests': '1',
+                        'Sec-Fetch-Dest': 'document',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Sec-Fetch-Site': 'none'
                     },
                     'socket_timeout': 30,
+                    'extractor_retries': 3,
                     'max_filesize': MAX_CONTENT_LENGTH,
                     'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
-                    'no_check_certificate': True
+                    'no_check_certificate': True,
+                    'ignore_errors': False
                 }
+                
+                # Ekstra seçenekleri birleştir
+                opts.update(strategy['extra_opts'])
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=False)
                     if not info:
+                        self.logger.warning(f"No info extracted for {strategy['name']}")
                         continue
                         
                     title = clean_filename(info.get('title', 'twitter_video'))
@@ -427,6 +456,7 @@ class SimpleDownloader:
                     if files:
                         file_path = os.path.join(temp_dir, files[0])
                         if os.path.getsize(file_path) > 1024:
+                            self.logger.info(f"Twitter download successful: {file_path}")
                             return file_path, title
                             
             except Exception as e:
@@ -468,7 +498,7 @@ class SimpleDownloader:
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '3.2-multi-platform',
+        'version': '3.3-twitter-fix',
         'status': 'running',
         'supported_platforms': ['YouTube', 'Instagram', 'Facebook', 'TikTok', 'Twitter/X', 'Generic']
     })
