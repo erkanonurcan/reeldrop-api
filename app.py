@@ -602,7 +602,7 @@ class SimpleDownloader:
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '3.4-tiktok-fix',
+        'version': '3.8-clean-fix',
         'status': 'running',
         'supported_platforms': ['YouTube', 'Instagram', 'Facebook', 'TikTok', 'Twitter/X', 'Generic']
     })
@@ -628,6 +628,7 @@ def download_video():
         quality = data.get('quality', 'best[height<=720]/best')
         
         logger.info(f"[{request_id}] Download started: {url}")
+        logger.info(f"[{request_id}] URL length: {len(url)}")
         logger.info(f"[{request_id}] URL analysis: {url.lower()}")
         
         # URL debug için
@@ -639,18 +640,11 @@ def download_video():
             logger.info(f"[{request_id}] TikTok.com detected!")
         else:
             logger.info(f"[{request_id}] Platform not detected, will try fallback")
-        logger.info(f"[{request_id}] URL analysis: {url.lower()}")
         
-        # URL debug için
-        if 'x.com' in url.lower():
-            logger.info(f"[{request_id}] X.com detected!")
-        elif 'twitter.com' in url.lower():
-            logger.info(f"[{request_id}] Twitter.com detected!")
-        else:
-            logger.info(f"[{request_id}] Platform not detected, will try fallback")
-        
-        if not url.startswith(('http://', 'https://')):
-            return jsonify({'error': 'Invalid URL'}), 400
+        # URL validation - daha esnek
+        if not (url.startswith(('http://', 'https://')) or url.startswith('www.')):
+            logger.error(f"[{request_id}] Invalid URL format: {url}")
+            return jsonify({'error': 'Invalid URL format', 'received_url': url}), 400
         
         downloader = SimpleDownloader()
         
