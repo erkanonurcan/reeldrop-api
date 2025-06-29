@@ -129,7 +129,8 @@ class EnhancedVideoDownloader:
                 'format_sort_force': True,
             })
         
-        self.logger.debug(f"Debug opts created for {platform}: {json.dumps(opts, indent=2, default=str)}")
+        self.logger.debug(f"Debug opts created for {platform} with quality: {quality}")
+        self.logger.debug(f"Headers: {opts.get('http_headers', {}).get('User-Agent', 'None')}")
         return opts
 
     def test_basic_extraction(self, url):
