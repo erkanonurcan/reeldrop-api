@@ -191,18 +191,18 @@ class SimpleDownloader:
     def _youtube_download(self, url, quality, temp_dir):
         strategies = [
             {
-                'name': 'Proxy Mobile Bypass',
+                'name': 'Mobile Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
                 'args': {},
-                'use_proxy': True
+                'use_proxy': False  # Proxy devre dışı
             },
             {
-                'name': 'Proxy Android Bypass',
+                'name': 'Android Bypass',
                 'quality': 'worst[ext=mp4]/worst',
                 'agent': 'Mozilla/5.0 (Linux; Android 11; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
                 'args': {},
-                'use_proxy': True
+                'use_proxy': False  # Proxy devre dışı
             },
             {
                 'name': 'Android Music Bypass',
@@ -298,7 +298,7 @@ class SimpleDownloader:
                     'quiet': True,
                     'no_warnings': True,
                     'http_headers': base_headers,
-                    'socket_timeout': 45,
+                    'socket_timeout': 15,  # Daha kısa timeout
                     'max_filesize': MAX_CONTENT_LENGTH,
                     'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
                     'no_check_certificate': True,
