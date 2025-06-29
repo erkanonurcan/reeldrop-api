@@ -94,18 +94,32 @@ class SimpleDownloader:
                 return self._instagram_download(url, quality, temp_dir)
             elif 'facebook.com' in url.lower() or 'fb.watch' in url.lower():
                 return self._facebook_download(url, quality, temp_dir)
-            elif 'tiktok.com' in url.lower():
+            elif 'tiktok.com' in url.lower() or 'vm.tiktok.com' in url.lower() or 'vt.tiktok.com' in url.lower():
                 return self._tiktok_download(url, quality, temp_dir)
             elif 'twitter.com' in url.lower() or 'x.com' in url.lower() or 't.co' in url.lower():
+                self.logger.info(f"Twitter/X platform detected: {url}")
                 return self._twitter_download(url, quality, temp_dir)
             else:
-                # Bilinmeyen platform için önce Twitter dene, sonra generic
+                # Bilinmeyen platform için sırayla dene
+                self.logger.info("Unknown platform, trying multiple extractors...")
+                
+                # Önce TikTok dene (kısa linkler olabilir)
                 try:
-                    self.logger.info("Unknown platform, trying Twitter first...")
+                    self.logger.info("Unknown URL - Trying TikTok extractor...")
+                    return self._tiktok_download(url, quality, temp_dir)
+                except Exception as tiktok_error:
+                    self.logger.warning(f"TikTok failed: {tiktok_error}")
+                
+                # Sonra Twitter dene (X.com olabilir)
+                try:
+                    self.logger.info("Unknown URL - Trying Twitter/X extractor...")
                     return self._twitter_download(url, quality, temp_dir)
-                except:
-                    self.logger.info("Twitter failed, trying generic download...")
-                    return self._generic_download(url, quality, temp_dir)
+                except Exception as twitter_error:
+                    self.logger.warning(f"Twitter failed: {twitter_error}")
+                
+                # Son olarak generic
+                self.logger.info("Unknown URL - Trying generic extractor...")
+                return self._generic_download(url, quality, temp_dir)
         except Exception as e:
             shutil.rmtree(temp_dir, ignore_errors=True)
             raise e
@@ -320,19 +334,33 @@ class SimpleDownloader:
         raise Exception("All Facebook strategies failed")
 
     def _tiktok_download(self, url, quality, temp_dir):
-        """TikTok video indirme"""
-        self.logger.info("TikTok download started")
+        """TikTok video indirme - gelişmiş"""
+        self.logger.info(f"TikTok download started for: {url}")
         
         strategies = [
             {
                 'name': 'TikTok Mobile',
                 'quality': 'best[ext=mp4]/best',
-                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1'
+                'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
+                'extra_opts': {}
+            },
+            {
+                'name': 'TikTok API',
+                'quality': 'best[ext=mp4]/best',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'extra_opts': {'extractor_args': {'tiktok': {'api_hostname': ['api.tiktokv.com']}}}
             },
             {
                 'name': 'TikTok Desktop',
                 'quality': 'best/worst',
-                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'extra_opts': {}
+            },
+            {
+                'name': 'TikTok Bot',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'TikTok 1.0.0 rv:1.0.0 (iPhone; iOS 15.0; en_US) Cronet',
+                'extra_opts': {}
             }
         ]
         
@@ -350,17 +378,24 @@ class SimpleDownloader:
                         'Accept-Language': 'en-US,en;q=0.5',
                         'Accept-Encoding': 'gzip, deflate',
                         'Connection': 'keep-alive',
-                        'Upgrade-Insecure-Requests': '1'
+                        'Upgrade-Insecure-Requests': '1',
+                        'Referer': 'https://www.tiktok.com/'
                     },
                     'socket_timeout': 30,
+                    'extractor_retries': 3,
                     'max_filesize': MAX_CONTENT_LENGTH,
                     'outtmpl': {'default': os.path.join(temp_dir, '%(title)s.%(ext)s')},
-                    'no_check_certificate': True
+                    'no_check_certificate': True,
+                    'ignore_errors': False
                 }
+                
+                # Ekstra seçenekleri birleştir
+                opts.update(strategy['extra_opts'])
                 
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=False)
                     if not info:
+                        self.logger.warning(f"No info extracted for {strategy['name']}")
                         continue
                         
                     title = clean_filename(info.get('title', 'tiktok_video'))
@@ -372,6 +407,7 @@ class SimpleDownloader:
                     if files:
                         file_path = os.path.join(temp_dir, files[0])
                         if os.path.getsize(file_path) > 1024:
+                            self.logger.info(f"TikTok download successful: {file_path}")
                             return file_path, title
                             
             except Exception as e:
@@ -498,7 +534,7 @@ class SimpleDownloader:
 def home():
     return jsonify({
         'service': 'ReelDrop API',
-        'version': '3.3-twitter-fix',
+        'version': '3.4-tiktok-fix',
         'status': 'running',
         'supported_platforms': ['YouTube', 'Instagram', 'Facebook', 'TikTok', 'Twitter/X', 'Generic']
     })
@@ -521,6 +557,26 @@ def download_video():
         quality = data.get('quality', 'best[height<=720]/best')
         
         logger.info(f"[{request_id}] Download started: {url}")
+        logger.info(f"[{request_id}] URL analysis: {url.lower()}")
+        
+        # URL debug için
+        if 'x.com' in url.lower():
+            logger.info(f"[{request_id}] X.com detected!")
+        elif 'twitter.com' in url.lower():
+            logger.info(f"[{request_id}] Twitter.com detected!")
+        elif 'tiktok.com' in url.lower():
+            logger.info(f"[{request_id}] TikTok.com detected!")
+        else:
+            logger.info(f"[{request_id}] Platform not detected, will try fallback")
+        logger.info(f"[{request_id}] URL analysis: {url.lower()}")
+        
+        # URL debug için
+        if 'x.com' in url.lower():
+            logger.info(f"[{request_id}] X.com detected!")
+        elif 'twitter.com' in url.lower():
+            logger.info(f"[{request_id}] Twitter.com detected!")
+        else:
+            logger.info(f"[{request_id}] Platform not detected, will try fallback")
         
         if not url.startswith(('http://', 'https://')):
             return jsonify({'error': 'Invalid URL'}), 400
