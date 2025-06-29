@@ -196,8 +196,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 15_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.6 Mobile/15E148 Safari/604.1',
                 'args': {
                     'youtube': {
-                        'player_client': 'ios',
-                        'skip': ['dash']
+                        'player_client': 'ios'
                     }
                 },
                 'use_proxy': True
@@ -208,8 +207,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (Linux; Android 11; SM-G973F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.104 Mobile Safari/537.36',
                 'args': {
                     'youtube': {
-                        'player_client': 'android',
-                        'skip': ['dash']
+                        'player_client': 'android'
                     }
                 },
                 'use_proxy': True
@@ -220,9 +218,7 @@ class SimpleDownloader:
                 'agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
                 'args': {
                     'youtube': {
-                        'player_client': 'android_music',
-                        'skip': ['dash', 'hls'],
-                        'player_skip': ['configs']
+                        'player_client': 'android_music'
                     }
                 },
                 'use_proxy': False
@@ -233,8 +229,7 @@ class SimpleDownloader:
                 'agent': 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
                 'args': {
                     'youtube': {
-                        'player_client': 'ios_music',
-                        'skip': ['dash', 'hls']
+                        'player_client': 'ios_music'
                     }
                 },
                 'use_proxy': False
@@ -245,10 +240,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/4.0 Chrome/76.0.3809.146 TV Safari/537.36',
                 'args': {
                     'youtube': {
-                        'player_client': 'tv_embedded',
-                        'skip': ['dash', 'hls'],
-                        'innertube_host': 'www.youtube.com',
-                        'innertube_key': None
+                        'player_client': 'tv_embedded'
                     }
                 },
                 'use_proxy': False
@@ -259,8 +251,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/537.36',
                 'args': {
                     'youtube': {
-                        'player_client': 'tv',
-                        'skip': ['dash', 'hls']
+                        'player_client': 'tv'
                     }
                 },
                 'use_proxy': False
@@ -271,9 +262,7 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
                 'args': {
                     'youtube': {
-                        'player_client': 'android_testsuite',
-                        'skip': ['dash', 'hls'],
-                        'player_skip': ['webpage', 'configs']
+                        'player_client': 'android_testsuite'
                     }
                 },
                 'use_proxy': False
@@ -284,8 +273,18 @@ class SimpleDownloader:
                 'agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
                 'args': {
                     'youtube': {
-                        'player_client': 'web_embedded',
-                        'skip': ['dash']
+                        'player_client': 'web_embedded'
+                    }
+                },
+                'use_proxy': False
+            },
+            {
+                'name': 'Web Bypass',
+                'quality': 'worst[ext=mp4]/worst',
+                'agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'args': {
+                    'youtube': {
+                        'player_client': 'web'
                     }
                 },
                 'use_proxy': False
